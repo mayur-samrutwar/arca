@@ -14,7 +14,7 @@ export default function Navbar() {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Left section: Logo */}
         <Link href="/" className="text-xl font-bold tracking-tight">
-          EvoNet
+          arca city
         </Link>
         
         {/* Center section: Primary Navigation */}

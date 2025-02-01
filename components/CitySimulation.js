@@ -67,6 +67,30 @@ const FIXED_HOUSES = [
   { x: 13, y: 14, type: 'HOME1' }
 ];
 
+// Fixed avatar positions on roads
+const AVATARS = [
+  {
+    seed: 'John',
+    position: { x: 8, y: 4 }
+  },
+  {
+    seed: 'Alice',
+    position: { x: 16, y: 7 }
+  },
+  {
+    seed: 'Bob',
+    position: { x: 8, y: 12 }
+  },
+  {
+    seed: 'Emma',
+    position: { x: 16, y: 14 }
+  },
+  {
+    seed: 'Mike',
+    position: { x: 8, y: 9 }
+  }
+];
+
 export default function CitySimulation() {
   const canvasRef = useRef(null);
 
@@ -74,7 +98,7 @@ export default function CitySimulation() {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
-    // Load all images
+    // Load all assets including avatars
     const loadedAssets = {};
     const loadAssets = async () => {
       // Load buildings
@@ -95,6 +119,16 @@ export default function CitySimulation() {
           img.onload = resolve;
         });
         loadedAssets[key] = img;
+      }
+
+      // Load avatars
+      for (const avatar of AVATARS) {
+        const img = new Image();
+        img.src = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${avatar.seed}`;
+        await new Promise((resolve) => {
+          img.onload = resolve;
+        });
+        loadedAssets[`avatar_${avatar.seed}`] = img;
       }
       return loadedAssets;
     };
@@ -183,6 +217,20 @@ export default function CitySimulation() {
             building.label,
             (building.position.x + building.size.width/2) * TILE_SIZE,
             (building.position.y + building.size.height) * TILE_SIZE + 14
+          );
+        }
+      });
+
+      // Draw avatars
+      AVATARS.forEach(avatar => {
+        const img = assets[`avatar_${avatar.seed}`];
+        if (img) {
+          ctx.drawImage(
+            img,
+            avatar.position.x * TILE_SIZE,
+            avatar.position.y * TILE_SIZE,
+            TILE_SIZE,  // Avatar size is 1x1 tile
+            TILE_SIZE
           );
         }
       });
