@@ -4,7 +4,7 @@ export default function NetworkStatus() {
   const [isMinimized, setIsMinimized] = useState(true);
 
   return (
-    <div className={`fixed bottom-4 right-4 z-50 w-72 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg transition-all duration-300 ${isMinimized ? 'h-12' : 'h-auto'}`}>
+    <div className={`fixed bottom-4 left-4 z-50 w-72 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg transition-all duration-300 ${isMinimized ? 'h-12' : 'h-auto'}`}>
       {/* Header */}
       <div 
         className="flex items-center justify-between p-4 cursor-pointer border-b border-black/10 dark:border-white/10"

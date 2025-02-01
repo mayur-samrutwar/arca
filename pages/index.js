@@ -4,7 +4,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import NetworkStatus from "@/components/NetworkStatus";
 import CitySimulation from '@/components/CitySimulation';
-
+import AgentChat from '@/components/AgentChat';
+import { useAccount } from 'wagmi';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,6 +19,8 @@ const geistMono = Geist_Mono({
 
 export default function Home() {
   const [isStatsMinimized, setIsStatsMinimized] = useState(false);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const { isConnected } = useAccount();
 
   return (
     <div className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background text-foreground`}>
@@ -65,9 +68,25 @@ export default function Home() {
             </div>
           </div>
         </aside>
-      </div>
 
-      <NetworkStatus />
+        {/* Agent Chat Interface */}
+        {isConnected && (
+          <div className={`fixed right-0 top-0 h-screen transition-all duration-300 ${
+            isChatExpanded ? 'w-96' : 'w-12'
+          }`}>
+            <button
+              onClick={() => setIsChatExpanded(!isChatExpanded)}
+              className="absolute left-0 top-1/2 -translate-x-full transform bg-foreground text-background p-2 rounded-l-lg hover:opacity-90 transition-opacity"
+            >
+              {isChatExpanded ? '→' : '←'}
+            </button>
+            <AgentChat isExpanded={isChatExpanded} />
+          </div>
+        )}
+      </div>
+      <div className="fixed bottom-0 left-0 w-64">
+        <NetworkStatus />
+      </div>
     </div>
   );
 }
