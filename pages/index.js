@@ -21,7 +21,6 @@ export default function Home() {
 
   return (
     <div className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background text-foreground`}>
-      <Navbar />
       
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8 flex gap-8">
