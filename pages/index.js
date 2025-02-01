@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import NetworkStatus from "@/components/NetworkStatus";
+import CitySimulation from '@/components/CitySimulation';
 
 
 const geistSans = Geist({
@@ -24,14 +25,8 @@ export default function Home() {
       
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8 flex gap-8">
-        {/* Simulation View */}
         <main className="flex-1">
-          <div className="aspect-video w-full bg-black/5 dark:bg-white/5 rounded-lg">
-            <div className="w-full h-full flex flex-col items-center justify-center">
-              <p className="text-sm text-black/50 dark:text-white/50 mb-2">Simulation Viewport</p>
-              <div className="text-xs text-black/30 dark:text-white/30 font-mono">CONNECTING TO NETWORK...</div>
-            </div>
-          </div>
+          <CitySimulation />
         </main>
 
         {/* Sidebar */}
