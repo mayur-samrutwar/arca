@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 
-export default function AgentChat({ isExpanded }) {
+export default function AgentChat() {
+  const [isMinimized, setIsMinimized] = useState(true);
   const [messages, setMessages] = useState([
     {
       type: 'agent',
@@ -42,65 +43,73 @@ export default function AgentChat({ isExpanded }) {
     setInput('');
   };
 
-  if (!isExpanded) {
-    return (
-      <div className="h-full bg-background border-l border-black/10 dark:border-white/10">
-        {/* Minimized view - optional: can show unread message count or status */}
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full h-full bg-background border-l border-black/10 dark:border-white/10 flex flex-col">
+    <div className={`fixed bottom-4 right-4 z-50 w-80 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg transition-all duration-300 ${isMinimized ? 'h-12' : 'h-[500px]'}`}>
       {/* Header */}
-      <div className="p-4 border-b border-black/10 dark:border-white/10">
-        <h2 className="font-medium">Agent Chat</h2>
-        <div className="flex items-center gap-2 text-sm text-foreground/70">
-          <span className="w-2 h-2 rounded-full bg-green-500"></span>
-          Online
+      <div 
+        className="flex items-center justify-between p-4 cursor-pointer border-b border-black/10 dark:border-white/10"
+        onClick={() => setIsMinimized(!isMinimized)}
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+          <h3 className="font-bold text-sm uppercase tracking-wider">My Agent</h3>
         </div>
+        <button className="text-foreground/50 hover:text-foreground transition-colors">
+          {isMinimized ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L10 4.414 6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L10 15.586l3.293-3.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+          )}
+        </button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`max-w-[80%] rounded-lg p-3 ${
-              message.type === 'user'
-                ? 'bg-foreground text-background'
-                : 'bg-black/5 dark:bg-white/5'
-            }`}>
-              <p className="text-sm">{message.content}</p>
-              <span className="text-xs opacity-70 mt-1 block">
-                {new Date(message.timestamp).toLocaleTimeString()}
-              </span>
+      {/* Messages and Input */}
+      <div className={`flex flex-col overflow-hidden transition-all duration-300 ${isMinimized ? 'h-0' : 'h-[calc(500px-48px)]'}`}>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div className={`max-w-[80%] rounded-lg p-3 ${
+                message.type === 'user'
+                  ? 'bg-foreground text-background'
+                  : 'bg-black/5 dark:bg-white/5'
+              }`}>
+                <p className="text-sm">{message.content}</p>
+                <span className="text-xs opacity-70 mt-1 block">
+                  {new Date(message.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t border-black/10 dark:border-white/10">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 bg-black/5 dark:bg-white/5 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            Send
-          </button>
+          ))}
+          <div ref={messagesEndRef} />
         </div>
-      </form>
+
+        {/* Input */}
+        <form onSubmit={handleSubmit} className="p-4 border-t border-black/10 dark:border-white/10">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 bg-black/5 dark:bg-white/5 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Send
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
