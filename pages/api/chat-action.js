@@ -1,69 +1,71 @@
 import OpenAI from 'openai';
 import { personalActions } from '@/utils/personal';
+import { parseEther } from 'viem';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+const ARCA_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_ARCA_TOKEN_ADDRESS;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { message, privateKey } = req.body;
+  const { message, privateKey, agentAddress } = req.body;
 
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
+  if (!message || !privateKey || !agentAddress) {
+    return res.status(400).json({ error: 'Message, private key, and agent address are required' });
   }
 
   try {
-    // Update the system prompt to be more explicit about private key handling
     const systemPrompt = `You are a helper that interprets user messages to determine which function to call.
     Available functions are:
-    - transfer(privateKey, recipientAddress, amount)
-    - donate(privateKey, organizationAddress, amount)
-    - payRent(privateKey, landlordAddress, amount)
-    - sendGift(privateKey, recipientAddress, amount)
+    - transfer(recipientAddress, amount)
+    - donate(organizationAddress, amount)
+    - payRent(landlordAddress, amount)
+    - sendGift(recipientAddress, amount)
     - checkBalance(address)
 
-    For any transaction function, extract the private key from the user's message if provided.
     Return ONLY a JSON object with the following structure:
     {
       "function": "functionName",
       "params": {
-        "privateKey": "0x...",  // Include if provided in message
         "recipientAddress": "0x...",
         "amount": "10"
       }
     }`;
 
-    // First, use OpenAI to interpret the user's message
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: message
-        }
+        { role: "system", content: systemPrompt },
+        { role: "user", content: message }
       ],
       temperature: 0,
       response_format: { type: "json_object" }
     });
 
     const action = JSON.parse(completion.choices[0].message.content);
+    
+    // Validate amount if it exists
+    if (action.params.amount) {
+      if (isNaN(action.params.amount)) {
+        throw new Error('Invalid amount specified');
+      }
+      // Convert string amount to string representation of wei
+      action.params.amount = action.params.amount.toString();
+    }
 
-    console.log(action);
+    console.log('Executing action:', action);
 
-    // Execute the appropriate function based on OpenAI's interpretation
+    // Execute the appropriate function
     let result;
     switch (action.function) {
       case 'transfer':
         result = await personalActions.transfer(
-          action.params.privateKey,
+          privateKey,
           action.params.recipientAddress,
           action.params.amount
         );

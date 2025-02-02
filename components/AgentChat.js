@@ -1,16 +1,33 @@
 import { useState, useRef, useEffect } from 'react';
+import { useReadContract, useAccount } from 'wagmi';
+import arcaAbi from '../contracts/abi/arca.json';
+
+const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
 
 export default function AgentChat() {
   const [isMinimized, setIsMinimized] = useState(true);
-  const [messages, setMessages] = useState([
-    {
-      type: 'agent',
-      content: "Hello! I'm your AI agent. I'll keep you updated on your deployments and answer any questions you have.",
-      timestamp: new Date(),
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
+  const { address } = useAccount();
+
+  // Get agent IDs
+  const { data: myAgentIds } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getMyAgents',
+    account: address,
+    watch: true,
+  });
+
+  // Get first agent's info
+  const { data: agentInfo } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getAgentInfo',
+    args: myAgentIds?.[0] ? [myAgentIds[0]] : undefined,
+    enabled: Boolean(myAgentIds?.length),
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -20,9 +37,20 @@ export default function AgentChat() {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    if (agentInfo) {
+      // Add initial message when agent info is loaded
+      setMessages([{
+        type: 'agent',
+        content: `Hello! I'm your AI agent ${agentInfo[0]}. I'll help you manage your ARCA tokens.`,
+        timestamp: new Date(),
+      }]);
+    }
+  }, [agentInfo]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || !agentInfo) return;
 
     // Add user message
     setMessages(prev => [...prev, {
@@ -32,7 +60,17 @@ export default function AgentChat() {
     }]);
 
     try {
-      // Call our new API endpoint
+      const privateKey = agentInfo[11];
+      const agentAddress = agentInfo[1];
+
+      // Debug logs
+      console.log('Agent Details:', {
+        address: agentAddress,
+        privateKey: privateKey,
+        message: input
+      });
+
+      // Call our API endpoint
       const response = await fetch('/api/chat-action', {
         method: 'POST',
         headers: {
@@ -40,11 +78,15 @@ export default function AgentChat() {
         },
         body: JSON.stringify({
           message: input,
-          privateKey: process.env.NEXT_PUBLIC_WALLET_PRIVATE_KEY // Be careful with private keys!
+          privateKey: privateKey,
+          agentAddress: agentAddress,
         })
       });
 
       const data = await response.json();
+
+      // Log API response
+      console.log('API Response:', data);
 
       // Add agent response
       setMessages(prev => [...prev, {
@@ -56,16 +98,25 @@ export default function AgentChat() {
       }]);
 
     } catch (error) {
-      // Handle error
+      console.error('Error in handleSubmit:', error);
       setMessages(prev => [...prev, {
         type: 'agent',
-        content: `Sorry, there was an error processing your request: ${error.message}`,
+        content: `Sorry, there was an error: ${error.message}`,
         timestamp: new Date(),
       }]);
     }
 
     setInput('');
   };
+
+  // Show loading or no agent state
+  if (!agentInfo) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 w-80 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg p-4">
+        {!address ? "Please connect your wallet" : "Loading your agent..."}
+      </div>
+    );
+  }
 
   return (
     <div className={`fixed bottom-4 right-4 z-50 w-80 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg transition-all duration-300 ${isMinimized ? 'h-12' : 'h-[500px]'}`}>

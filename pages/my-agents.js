@@ -1,41 +1,98 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useReadContracts, useAccount, useReadContract } from 'wagmi';
+import { formatEther } from 'viem';
+import arcaAbi from '../contracts/abi/arca.json';
+
+const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
 
 export default function MyAgents() {
-  const [agents] = useState([
-    {
-      id: 1,
-      name: "Market Maker Bot",
-      status: "active",
-      lastActive: "2024-03-20T10:30:00",
-      performance: "+2.5%",
-    },
-    {
-      id: 2,
-      name: "Trading Bot Alpha",
-      status: "paused",
-      lastActive: "2024-03-19T15:45:00",
-      performance: "+1.8%",
-    },
-    {
-      id: 3,
-      name: "Arbitrage Scanner",
-      status: "inactive",
-      lastActive: "2024-03-18T09:15:00",
-      performance: "-0.3%",
-    },
-  ]);
+  const [agentDetails, setAgentDetails] = useState([]);
+  const { address } = useAccount();
+
+  // Get agent IDs
+  const { data: myAgentIds, isError, isLoading: isLoadingIds } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getMyAgents',
+    account: address,
+    watch: true,
+  });
+
+  // Prepare contracts config for batch reading all agents
+  const agentInfoConfig = myAgentIds?.map(id => ({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getAgentInfo',
+    args: [id],
+  })) ?? [];
+
+  // Fetch all agents info in parallel
+  const { data: agentsInfo, isLoading: isLoadingInfo } = useReadContracts({
+    contracts: agentInfoConfig,
+    enabled: Boolean(myAgentIds?.length),
+  });
+
+  // Format agent info when available
+  useEffect(() => {
+    if (!agentsInfo || !myAgentIds) return;
+
+    const formattedAgents = agentsInfo.map((info, index) => ({
+      id: myAgentIds[index],
+      name: info.result[0],
+      owner: info.result[1],
+      gender: info.result[2],
+      occupation: info.result[3],
+      initialBalance: formatEther(info.result[4]),
+      traits: info.result[5],
+      birthDate: new Date(Number(info.result[6]) * 1000),
+      expiryDate: new Date(Number(info.result[7]) * 1000),
+      isAlive: info.result[8],
+      rewardBalance: formatEther(info.result[9]),
+      publicKey: info.result[10],
+      privateKey: info.result[11],
+    }));
+
+    setAgentDetails(formattedAgents);
+  }, [agentsInfo, myAgentIds]);
+
+  // Show loading state
+  if (isLoadingIds || isLoadingInfo) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Loading agents...</div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (isError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-red-500 text-center">Error loading agents</div>
+      </div>
+    );
+  }
+
+  // Show no wallet connected state
+  if (!address) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Please connect your wallet to view your agents</div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">My Agents</h1>
-        <button className="px-4 py-2 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity">
-          Create New Agent
-        </button>
+        <div className="text-sm text-gray-500">
+          Connected: {address.slice(0, 6)}...{address.slice(-4)}
+        </div>
       </div>
 
       <div className="grid gap-4">
-        {agents.map((agent) => (
+        {agentDetails.map((agent) => (
           <div
             key={agent.id}
             className="p-4 rounded-lg border border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20 transition-colors"
@@ -45,43 +102,40 @@ export default function MyAgents() {
                 <h3 className="font-medium">{agent.name}</h3>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`inline-block w-2 h-2 rounded-full ${
-                    agent.status === 'active' ? 'bg-green-500' :
-                    agent.status === 'paused' ? 'bg-yellow-500' :
-                    'bg-red-500'
+                    agent.isAlive ? 'bg-green-500' : 'bg-red-500'
                   }`} />
-                  <span className="text-sm text-foreground/70 capitalize">{agent.status}</span>
+                  <span className="text-sm text-foreground/70">
+                    {agent.isAlive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <p className="text-sm text-foreground/70">
+                    Occupation: <span className="capitalize">{agent.occupation}</span>
+                  </p>
+                  <p className="text-sm text-foreground/70">
+                    Traits: {agent.traits.join(', ')}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className={`font-medium ${
-                  agent.performance.startsWith('+') ? 'text-green-500' : 'text-red-500'
-                }`}>
-                  {agent.performance}
+                <p className="font-medium">
+                  {agent.initialBalance} ARCA
                 </p>
-                <p className="text-sm text-foreground/70">
-                  Last active: {new Date(agent.lastActive).toLocaleDateString()}
-                </p>
+                {Number(agent.rewardBalance) > 0 && (
+                  <p className="text-sm text-green-500">
+                    +{agent.rewardBalance} ARCA (Rewards)
+                  </p>
+                )}
               </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button className="px-3 py-1.5 text-sm border border-black/10 dark:border-white/10 rounded-full hover:border-black/20 dark:hover:border-white/20 transition-colors">
-                Edit
-              </button>
-              <button className="px-3 py-1.5 text-sm border border-black/10 dark:border-white/10 rounded-full hover:border-black/20 dark:hover:border-white/20 transition-colors">
-                View Details
-              </button>
-              {agent.status === 'active' ? (
-                <button className="px-3 py-1.5 text-sm border border-black/10 dark:border-white/10 rounded-full hover:border-black/20 dark:hover:border-white/20 transition-colors">
-                  Pause
-                </button>
-              ) : (
-                <button className="px-3 py-1.5 text-sm border border-black/10 dark:border-white/10 rounded-full hover:border-black/20 dark:hover:border-white/20 transition-colors">
-                  Start
-                </button>
-              )}
             </div>
           </div>
         ))}
+
+        {(!agentDetails.length) && (
+          <div className="text-center py-8 text-foreground/70">
+            You don't have any agents yet. Create one to get started!
+          </div>
+        )}
       </div>
     </div>
   );
