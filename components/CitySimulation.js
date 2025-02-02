@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ConversationCard from './ConversationCard';
+import { useReadContract, useReadContracts, useAccount } from 'wagmi';
+import arcaAbi from '../contracts/abi/arca.json';
 
 // City layout configuration
 const TILE_SIZE = 32; // Each tile is 32x32 pixels
@@ -94,42 +96,133 @@ const FIXED_HOUSES = [
   { x: 13, y: 14, type: 'HOME1' }
 ];
 
-// Fixed avatar positions on roads
-const AVATARS = [
-  {
-    seed: 'John',
-    position: { x: 8, y: 4 }  // On vertical road
-  },
-  {
-    seed: 'Alice',
-    position: { x: 8, y: 7 }  // On vertical road
-  },
-];
+const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
 
 // Adjust movement constants
 const MOVEMENT_SPEED = 0.01; // Tiles per frame
 const INTERACTION_DISTANCE = 1.5; // Tiles
 const BUBBLE_DURATION = 2000; // 2 seconds
 
+// Helper function to get random road position
+const getRandomRoadPosition = () => {
+  // Randomly choose between horizontal and vertical roads
+  const isHorizontal = Math.random() < 0.5;
+  
+  if (isHorizontal) {
+    // Choose between y=6 or y=12 roads
+    const y = Math.random() < 0.5 ? 6 : 12;
+    // Random x position along the road
+    const x = Math.random() * GRID_WIDTH;
+    return { x, y };
+  } else {
+    // Choose between x=8 or x=16 roads
+    const x = Math.random() < 0.5 ? 8 : 16;
+    // Random y position along the road
+    const y = Math.random() * GRID_HEIGHT;
+    return { x, y };
+  }
+};
+
+// Helper function to serialize agent data
+const serializeAgent = (agent) => {
+  return {
+    id: agent.id.toString(), // Convert BigInt to string
+    name: agent.name,
+    owner: agent.owner,
+    position: agent.position
+  };
+};
+
 export default function CitySimulation() {
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
   const [hoveredBuilding, setHoveredBuilding] = useState(null);
   const [selectedBuilding, setSelectedBuilding] = useState(null);
-  const avatarPositionsRef = useRef(AVATARS.map(avatar => ({
-    ...avatar.position,
-    direction: Math.random() * Math.PI * 2, // Random initial direction
-    isInteracting: false
-  })));
+  const avatarPositionsRef = useRef([]);
   const [conversations, setConversations] = useState({});
+  const [agents, setAgents] = useState([]);
+  const [loadedAssets, setLoadedAssets] = useState({});
+  
+  // Add account to filter owned agents
+  const { address } = useAccount();
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+  // Fetch live agents using wagmi
+  const { data: liveAgents } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getAllLiveAgents',
+    watch: true,
+  });
+
+  // Prepare contracts config for batch reading all agents
+  const agentInfoConfig = liveAgents?.map(id => ({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getAgentInfo',
+    args: [id],
+  })) ?? [];
+
+  // Fetch all agents info in parallel
+  const { data: agentsInfo } = useReadContracts({
+    contracts: agentInfoConfig,
+    enabled: Boolean(liveAgents?.length),
+  });
+
+  // Load avatar for a single agent
+  const loadAgentAvatar = async (agent) => {
+    if (!agent?.name || loadedAssets[`avatar_${agent.name}`]) return;
     
-    // Load all assets including avatars
-    const loadedAssets = {};
-    const loadAssets = async () => {
+    const img = new Image();
+    img.src = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${agent.name}`;
+    await new Promise((resolve) => {
+      img.onload = resolve;
+    });
+    
+    setLoadedAssets(prev => ({
+      ...prev,
+      [`avatar_${agent.name}`]: img
+    }));
+  };
+
+  // Initialize agent positions when data is loaded
+  useEffect(() => {
+    if (!agentsInfo || !liveAgents) return;
+
+    const formattedAgents = agentsInfo.map((info, index) => {
+      const roadPosition = getRandomRoadPosition();
+      return {
+        id: liveAgents[index],
+        name: info.result[0],
+        owner: info.result[1],
+        position: roadPosition
+      };
+    });
+
+    setAgents(formattedAgents);
+    
+    // Initialize or update avatar positions
+    avatarPositionsRef.current = formattedAgents.map((agent, idx) => {
+      const existingPos = avatarPositionsRef.current[idx];
+      if (existingPos) return existingPos;
+      
+      // Initialize new position on a road
+      const isHorizontal = Math.abs(agent.position.y - 6) < 0.1 || Math.abs(agent.position.y - 12) < 0.1;
+      return {
+        ...agent.position,
+        direction: isHorizontal ? (Math.random() < 0.5 ? 0 : Math.PI) : (Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2),
+        isInteracting: false
+      };
+    });
+
+    // Load avatars for all agents
+    formattedAgents.forEach(loadAgentAvatar);
+  }, [agentsInfo, liveAgents]);
+
+  // Load static assets
+  useEffect(() => {
+    const loadStaticAssets = async () => {
+      const assets = {};
+      
       // Load buildings
       for (const [key, building] of Object.entries(BUILDINGS)) {
         const img = new Image();
@@ -137,7 +230,7 @@ export default function CitySimulation() {
         await new Promise((resolve) => {
           img.onload = resolve;
         });
-        loadedAssets[key] = img;
+        assets[key] = img;
       }
 
       // Load houses
@@ -147,20 +240,21 @@ export default function CitySimulation() {
         await new Promise((resolve) => {
           img.onload = resolve;
         });
-        loadedAssets[key] = img;
+        assets[key] = img;
       }
 
-      // Load avatars
-      for (const avatar of AVATARS) {
-        const img = new Image();
-        img.src = `https://api.dicebear.com/9.x/pixel-art/svg?seed=${avatar.seed}`;
-        await new Promise((resolve) => {
-          img.onload = resolve;
-        });
-        loadedAssets[`avatar_${avatar.seed}`] = img;
-      }
-      return loadedAssets;
+      setLoadedAssets(prev => ({...prev, ...assets}));
     };
+
+    loadStaticAssets();
+  }, []);
+
+  // Update canvas drawing
+  useEffect(() => {
+    if (!canvasRef.current || !agents.length || Object.keys(loadedAssets).length === 0) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
 
     const drawConversation = (ctx, x, y, message) => {
       ctx.fillStyle = 'white';
@@ -219,7 +313,11 @@ export default function CitySimulation() {
           } else if (isNearVerticalRoad) {
             pos.direction = Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2; // Move up or down
           } else {
-            pos.direction = Math.random() * Math.PI * 2; // Random direction if lost
+            // Lost agent - reset to nearest road
+            const nearestRoad = getRandomRoadPosition();
+            pos.x = nearestRoad.x;
+            pos.y = nearestRoad.y;
+            pos.direction = Math.random() * Math.PI * 2;
           }
           return;
         }
@@ -249,8 +347,8 @@ export default function CitySimulation() {
                 'Content-Type': 'application/json',
               },
               body: JSON.stringify({
-                agent1: AVATARS[idx],
-                agent2: AVATARS[otherIdx]
+                agent1: serializeAgent(agents[idx]),
+                agent2: serializeAgent(agents[otherIdx])
               })
             })
             .then(res => res.json())
@@ -263,7 +361,9 @@ export default function CitySimulation() {
                     x: (pos.x + otherPos.x) / 2,
                     y: (pos.y + otherPos.y) / 2
                   },
-                  startTime: Date.now()
+                  startTime: Date.now(),
+                  agent1Name: agents[idx].name,
+                  agent2Name: agents[otherIdx].name
                 }
               }));
             });
@@ -299,7 +399,7 @@ export default function CitySimulation() {
       });
     };
 
-    const drawCity = (assets) => {
+    const drawCity = () => {
       // Draw grass background
       ctx.fillStyle = '#90EE90';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -341,7 +441,7 @@ export default function CitySimulation() {
 
       // Draw houses
       FIXED_HOUSES.forEach(house => {
-        const img = assets[house.type];
+        const img = loadedAssets[house.type];
         if (img) {
           ctx.drawImage(
             img,
@@ -355,7 +455,7 @@ export default function CitySimulation() {
 
       // Draw major buildings with labels
       Object.entries(BUILDINGS).forEach(([key, building]) => {
-        const img = assets[key];
+        const img = loadedAssets[key];
         if (img) {
           // Draw building
           ctx.drawImage(
@@ -392,8 +492,10 @@ export default function CitySimulation() {
 
       // Draw avatars with updated positions
       avatarPositionsRef.current.forEach((pos, idx) => {
-        const avatar = AVATARS[idx];
-        const img = assets[`avatar_${avatar.seed}`];
+        const agent = agents[idx];
+        if (!agent) return;
+        
+        const img = loadedAssets[`avatar_${agent.name}`];
         if (img) {
           ctx.drawImage(
             img,
@@ -405,11 +507,17 @@ export default function CitySimulation() {
         }
       });
 
-      // Draw conversations separately after drawing avatars
+      // Draw conversations only for owned agents
       Object.entries(conversations).forEach(([id, conversation]) => {
         if (!conversation?.messages) return;
         
         const [idx1, idx2] = id.split('-').map(Number);
+        const agent1 = agents[idx1];
+        const agent2 = agents[idx2];
+        
+        // Only show conversations if one of the agents is owned by the user
+        if (agent1?.owner !== address && agent2?.owner !== address) return;
+        
         const pos1 = avatarPositionsRef.current[idx1];
         const pos2 = avatarPositionsRef.current[idx2];
         
@@ -419,7 +527,7 @@ export default function CitySimulation() {
           const currentMessage = conversation.messages[messageIndex];
           
           if (currentMessage) {
-            if (currentMessage.speaker === AVATARS[idx1].seed) {
+            if (currentMessage.speaker === agent1.name) {
               drawConversation(ctx, pos1.x, pos1.y, currentMessage.message);
             } else {
               drawConversation(ctx, pos2.x, pos2.y, currentMessage.message);
@@ -429,25 +537,20 @@ export default function CitySimulation() {
       });
     };
 
-    const animate = (assets) => {
-      drawCity(assets);
-      animationFrameRef.current = requestAnimationFrame(() => animate(assets));
+    const animate = () => {
+      updateAvatarPositions();
+      drawCity();
+      animationFrameRef.current = requestAnimationFrame(animate);
     };
 
-    const init = async () => {
-      const assets = await loadAssets();
-      animate(assets);
-    };
+    animate();
 
-    init();
-
-    // Cleanup
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, []); // Empty dependency array - only runs once
+  }, [agents, loadedAssets, address]);
 
   const handleCanvasClick = (e) => {
     const canvas = canvasRef.current;
@@ -536,6 +639,8 @@ export default function CitySimulation() {
           key={id}
           conversation={conversation}
           position={conversation.position}
+          agent1Name={conversation.agent1Name}
+          agent2Name={conversation.agent2Name}
           onClose={() => handleConversationEnd(id)}
         />
       ))}

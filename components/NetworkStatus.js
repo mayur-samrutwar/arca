@@ -1,7 +1,22 @@
 import { useState } from 'react';
+import { useReadContract } from 'wagmi';
+import arcaAbi from '../contracts/abi/arca.json';
+
+const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
 
 export default function NetworkStatus() {
   const [isMinimized, setIsMinimized] = useState(true);
+
+  // Read current population from the contract
+  const { data: cityData } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'city',
+    watch: true,
+  });
+
+  // Get current population from city data and convert from BigInt
+  const currentPopulation = cityData ? Number(cityData[1]) : 0;
 
   return (
     <div className={`fixed bottom-4 left-4 z-50 w-72 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg transition-all duration-300 ${isMinimized ? 'h-12' : 'h-auto'}`}>
@@ -34,7 +49,7 @@ export default function NetworkStatus() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm text-foreground/70">Active Agents</span>
-              <span className="font-mono text-lg font-bold">247</span>
+              <span className="font-mono text-lg font-bold">{currentPopulation}</span>
             </div>
             
             <div className="flex justify-between items-center">
