@@ -104,9 +104,11 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             require(occupationCost > 0, "Unemployed cost not initialized");
         }
         
-        uint256 totalCost = occupationCost + _initialBalance;
+        // Transfer occupation cost to contract
+        require(arcaToken.transferFrom(msg.sender, address(this), occupationCost), "Occupation cost transfer failed");
         
-        require(arcaToken.transferFrom(msg.sender, address(this), totalCost), "Transfer failed");
+        // Transfer initial balance directly to agent's address
+        require(arcaToken.transferFrom(msg.sender, address(uint160(uint256(keccak256(abi.encodePacked(_publicKey))))), _initialBalance), "Initial balance transfer failed");
         
         uint256 agentId = ++agentCount;
         uint256 expiryDate = block.timestamp + 1 days;
@@ -115,7 +117,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             name: _name,
             owner: msg.sender,
             gender: _gender,
-            occupation: finalOccupation, // Use the potentially defaulted occupation
+            occupation: finalOccupation,
             initialBalance: _initialBalance,
             traits: _traits,
             birthDate: block.timestamp,

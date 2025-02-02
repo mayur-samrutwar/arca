@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useReadContract, useAccount } from 'wagmi';
 import arcaAbi from '../contracts/abi/arca.json';
+import { keccak256 } from 'ethereum-cryptography/keccak';
+import { hexlify } from 'ethers';
 
 const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
 
@@ -61,12 +63,20 @@ export default function AgentChat() {
 
     try {
       const privateKey = agentInfo[11];
-      const agentAddress = agentInfo[1];
+      const publicKey = agentInfo[10];
+      
+      // Convert public key to bytes and hash it
+      const publicKeyBytes = Buffer.from(publicKey);
+      const hashedPubKey = keccak256(publicKeyBytes);
+      
+      // Take last 20 bytes and format as hex address
+      const agentAddress = `0x${Buffer.from(hashedPubKey.slice(-20)).toString('hex')}`;
 
       // Debug logs
       console.log('Agent Details:', {
         address: agentAddress,
         privateKey: privateKey,
+        publicKey: publicKey,
         message: input
       });
 
@@ -92,7 +102,9 @@ export default function AgentChat() {
       setMessages(prev => [...prev, {
         type: 'agent',
         content: data.success 
-          ? `Successfully executed ${data.action}. Transaction hash: ${data.result}`
+          ? data.action === 'checkBalance'
+            ? `Your current balance is ${data.result}`
+            : `Successfully executed ${data.action}. Transaction hash: ${data.result}`
           : `Sorry, there was an error: ${data.error}`,
         timestamp: new Date(),
       }]);

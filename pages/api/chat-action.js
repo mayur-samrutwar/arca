@@ -28,12 +28,14 @@ export default async function handler(req, res) {
     - sendGift(recipientAddress, amount)
     - checkBalance(address)
 
+    For checkBalance, if no address is specified, use the keyword "sender" as the address parameter.
+
     Return ONLY a JSON object with the following structure:
     {
       "function": "functionName",
       "params": {
-        "recipientAddress": "0x...",
-        "amount": "10"
+        "address": "sender" or "0x...",
+        "amount": "10" // only for transfer functions
       }
     }`;
 
@@ -49,13 +51,9 @@ export default async function handler(req, res) {
 
     const action = JSON.parse(completion.choices[0].message.content);
     
-    // Validate amount if it exists
-    if (action.params.amount) {
-      if (isNaN(action.params.amount)) {
-        throw new Error('Invalid amount specified');
-      }
-      // Convert string amount to string representation of wei
-      action.params.amount = action.params.amount.toString();
+    // Handle the "sender" keyword for checkBalance
+    if (action.function === 'checkBalance' && action.params.address === 'sender') {
+      action.params.address = agentAddress;
     }
 
     console.log('Executing action:', action);
@@ -63,6 +61,10 @@ export default async function handler(req, res) {
     // Execute the appropriate function
     let result;
     switch (action.function) {
+      case 'checkBalance':
+        result = await personalActions.checkBalance(action.params.address);
+        break;
+
       case 'transfer':
         result = await personalActions.transfer(
           privateKey,
@@ -95,21 +97,18 @@ export default async function handler(req, res) {
         );
         break;
 
-      case 'checkBalance':
-        result = await personalActions.checkBalance(
-          action.params.address
-        );
-        break;
-
       default:
         throw new Error('Unknown function');
     }
 
-    res.status(200).json({
+    // Format the response for checkBalance
+    const response = {
       success: true,
       action: action.function,
-      result
-    });
+      result: action.function === 'checkBalance' ? `${result} ARCA` : result
+    };
+
+    res.status(200).json(response);
 
   } catch (error) {
     console.error('Error:', error);
