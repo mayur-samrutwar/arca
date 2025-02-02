@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 
 // Generate Ethereum-compatible keys
-function generateETHKeys() {
+export const generateETHKeys = () => {
   const wallet = ethers.Wallet.createRandom();
   
   return {
@@ -9,4 +9,4 @@ function generateETHKeys() {
     publicKey: wallet.publicKey,
     privateKey: wallet.privateKey
   };
-}
+};

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@coinbase/onchainkit": "^0.36.9",
+    "ethers": "^6.13.5",
     "next": "15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
