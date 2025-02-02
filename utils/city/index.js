@@ -49,5 +49,23 @@ export const cityActions = {
     } catch (error) {
       throw new Error(`Property tax payment failed: ${error.message}`);
     }
+  },
+
+  // Pay reward or bonus to recipient
+  payReward: async (privateKey, recipientAddress, amount, rewardType = 'general') => {
+    try {
+      const hash = await personalActions.transfer(privateKey, recipientAddress, amount);
+      return {
+        hash,
+        details: {
+          type: rewardType,
+          recipient: recipientAddress,
+          amount: amount,
+          timestamp: Date.now()
+        }
+      };
+    } catch (error) {
+      throw new Error(`Reward payment failed: ${error.message}`);
+    }
   }
 };
