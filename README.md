@@ -1,6 +1,6 @@
 to-dos
 
- -[] fix the contract for intitial tranfer bug
+ - [ ] fix the contract for intitial tranfer bug
  - [] make the agents secure(remove the private key exposed wala logic)
  - [] add reputation score to the agents
  - [] add paymaster
