@@ -52,7 +52,14 @@ export const personalActions = {
   // Transfer ARCA tokens
   transfer: async (privateKey, recipientAddress, amount) => {
     try {
-      const account = privateKeyToAccount(`0x${privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey}`);
+      if (!privateKey || typeof privateKey !== 'string') {
+        throw new Error('Invalid private key');
+      }
+
+      // Clean up the private key format
+      const cleanPrivateKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
+      
+      const account = privateKeyToAccount(cleanPrivateKey);
       const walletClient = createWalletClient({
         account,
         chain: baseSepolia,
@@ -68,6 +75,7 @@ export const personalActions = {
 
       return hash;
     } catch (error) {
+      console.error('Transfer error details:', error);
       throw new Error(`Transfer failed: ${error.message}`);
     }
   },

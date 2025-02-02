@@ -20,7 +20,7 @@ export default function AgentChat() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
@@ -31,14 +31,38 @@ export default function AgentChat() {
       timestamp: new Date(),
     }]);
 
-    // Simulate agent response (replace with actual agent logic)
-    setTimeout(() => {
+    try {
+      // Call our new API endpoint
+      const response = await fetch('/api/chat-action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: input,
+          privateKey: process.env.NEXT_PUBLIC_WALLET_PRIVATE_KEY // Be careful with private keys!
+        })
+      });
+
+      const data = await response.json();
+
+      // Add agent response
       setMessages(prev => [...prev, {
         type: 'agent',
-        content: 'I received your message. This is a placeholder response. Integration with actual agent responses pending.',
+        content: data.success 
+          ? `Successfully executed ${data.action}. Transaction hash: ${data.result}`
+          : `Sorry, there was an error: ${data.error}`,
         timestamp: new Date(),
       }]);
-    }, 1000);
+
+    } catch (error) {
+      // Handle error
+      setMessages(prev => [...prev, {
+        type: 'agent',
+        content: `Sorry, there was an error processing your request: ${error.message}`,
+        timestamp: new Date(),
+      }]);
+    }
 
     setInput('');
   };
