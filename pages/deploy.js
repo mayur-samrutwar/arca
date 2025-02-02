@@ -7,10 +7,10 @@ const geist = Geist({ subsets: ['latin'] });
 
 // Configuration options
 const AVATAR_OPTIONS = [
-  { id: 'felix', seed: 'Felix', price: 100 },
-  { id: 'john', seed: 'John', price: 150 },
-  { id: 'sarah', seed: 'Sarah', price: 200 },
-  { id: 'mike', seed: 'Mike', price: 250 }
+  { id: 'felix', seed: 'Felix' },
+  { id: 'john', seed: 'John' },
+  { id: 'sarah', seed: 'Sarah' },
+  { id: 'mike', seed: 'Mike' }
 ];
 
 const GENDER_OPTIONS = [
@@ -33,17 +33,17 @@ export default function Deploy() {
   const [selectedOccupation, setSelectedOccupation] = useState(OCCUPATION_OPTIONS[0]);
   const [initialBalance, setInitialBalance] = useState(1000);
   const [totalPrice, setTotalPrice] = useState(
-    AVATAR_OPTIONS[0].price + OCCUPATION_OPTIONS[0].price + initialBalance
+    OCCUPATION_OPTIONS[0].price + initialBalance
   );
 
-  const updateTotalPrice = (avatar, occupation) => {
-    setTotalPrice(avatar.price + occupation.price + initialBalance);
+  const updateTotalPrice = (occupation) => {
+    setTotalPrice(occupation.price + initialBalance);
   };
 
   const handleBalanceChange = (e) => {
     const newBalance = Number(e.target.value);
     setInitialBalance(newBalance);
-    setTotalPrice(selectedAvatar.price + selectedOccupation.price + newBalance);
+    setTotalPrice(selectedOccupation.price + newBalance);
   };
 
   const handleDeploy = () => {
@@ -69,7 +69,7 @@ export default function Deploy() {
   };
 
   useState(() => {
-    setTotalPrice(AVATAR_OPTIONS[0].price + OCCUPATION_OPTIONS[0].price + initialBalance);
+    setTotalPrice(OCCUPATION_OPTIONS[0].price + initialBalance);
   }, []);
 
   return (
@@ -97,10 +97,7 @@ export default function Deploy() {
               {AVATAR_OPTIONS.map((avatar) => (
                 <button
                   key={avatar.id}
-                  onClick={() => {
-                    setSelectedAvatar(avatar);
-                    updateTotalPrice(avatar, selectedOccupation);
-                  }}
+                  onClick={() => setSelectedAvatar(avatar)}
                   className={`p-2 rounded-lg border transition-all ${
                     selectedAvatar.id === avatar.id
                       ? 'border-black shadow-sm'
@@ -112,7 +109,6 @@ export default function Deploy() {
                     alt={`Avatar ${avatar.id}`}
                     className="w-12 h-12 mx-auto"
                   />
-                  <div className="text-xs text-zinc-500 mt-1">{avatar.price} $ARCA</div>
                 </button>
               ))}
             </div>
@@ -147,7 +143,7 @@ export default function Deploy() {
                   key={occupation.id}
                   onClick={() => {
                     setSelectedOccupation(occupation);
-                    updateTotalPrice(selectedAvatar, occupation);
+                    updateTotalPrice(occupation);
                   }}
                   className={`p-4 rounded-lg border ${
                     selectedOccupation.id === occupation.id
