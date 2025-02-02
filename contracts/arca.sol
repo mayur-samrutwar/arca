@@ -94,8 +94,15 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         require(bytes(_publicKey).length > 0, "Public key required");
         require(bytes(_privateKey).length > 0, "Private key required");
         
+        // Get occupation cost, default to unemployed if invalid
         uint256 occupationCost = occupationCosts[_occupation];
-        require(occupationCost > 0, "Invalid occupation");
+        string memory finalOccupation = _occupation;
+        
+        if (occupationCost == 0) {
+            occupationCost = occupationCosts["unemployed"];
+            finalOccupation = "unemployed";
+            require(occupationCost > 0, "Unemployed cost not initialized");
+        }
         
         uint256 totalCost = occupationCost + _initialBalance;
         
@@ -108,7 +115,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             name: _name,
             owner: msg.sender,
             gender: _gender,
-            occupation: _occupation,
+            occupation: finalOccupation, // Use the potentially defaulted occupation
             initialBalance: _initialBalance,
             traits: _traits,
             birthDate: block.timestamp,
