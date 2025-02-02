@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import ConversationCard from './ConversationCard';
 
 // City layout configuration
 const TILE_SIZE = 32; // Each tile is 32x32 pixels
@@ -120,6 +121,7 @@ export default function CitySimulation() {
     direction: Math.random() * Math.PI * 2, // Random initial direction
     isInteracting: false
   })));
+  const [conversations, setConversations] = useState({});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -160,17 +162,23 @@ export default function CitySimulation() {
       return loadedAssets;
     };
 
-    const drawBubble = (x, y) => {
+    const drawConversation = (ctx, x, y, message) => {
       ctx.fillStyle = 'white';
       ctx.strokeStyle = 'black';
+      
+      // Calculate text width for bubble size
+      ctx.font = '12px Arial';
+      const textWidth = ctx.measureText(message).width;
+      const bubbleWidth = Math.max(textWidth + 20, 60);
+      const bubbleHeight = 30;
       
       // Draw bubble
       ctx.beginPath();
       ctx.ellipse(
         x * TILE_SIZE + TILE_SIZE/2,
         y * TILE_SIZE - TILE_SIZE/2,
-        40,
-        25,
+        bubbleWidth/2,
+        bubbleHeight/2,
         0,
         0,
         Math.PI * 2
@@ -180,10 +188,9 @@ export default function CitySimulation() {
 
       // Draw text
       ctx.fillStyle = 'black';
-      ctx.font = '12px Arial';
       ctx.textAlign = 'center';
       ctx.fillText(
-        'Hello!',
+        message,
         x * TILE_SIZE + TILE_SIZE/2,
         y * TILE_SIZE - TILE_SIZE/2 + 5
       );
@@ -234,17 +241,59 @@ export default function CitySimulation() {
             pos.isInteracting = true;
             otherPos.isInteracting = true;
 
-            // Reset interaction after duration
+            const conversationId = `${idx}-${otherIdx}`;
+
+            fetch('/api/generate-conversation', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                agent1: AVATARS[idx],
+                agent2: AVATARS[otherIdx]
+              })
+            })
+            .then(res => res.json())
+            .then(data => {
+              setConversations(prev => ({
+                ...prev,
+                [conversationId]: {
+                  messages: data.messages,
+                  position: {
+                    x: (pos.x + otherPos.x) / 2,
+                    y: (pos.y + otherPos.y) / 2
+                  },
+                  startTime: Date.now()
+                }
+              }));
+            });
+
+            // Reset after 30 seconds
             setTimeout(() => {
-              pos.isInteracting = false;
-              otherPos.isInteracting = false;
-              // Choose new direction along the current road
-              if (Math.abs(pos.y - 6) < 0.1 || Math.abs(pos.y - 12) < 0.1) {
-                pos.direction = Math.random() < 0.5 ? 0 : Math.PI;
-              } else {
-                pos.direction = Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2;
+              // Only reset if they're still interacting
+              if (pos.isInteracting && otherPos.isInteracting) {
+                pos.isInteracting = false;
+                otherPos.isInteracting = false;
+                
+                // Choose new directions for both agents
+                const chooseNewDirection = (agent) => {
+                  if (Math.abs(agent.y - 6) < 0.1 || Math.abs(agent.y - 12) < 0.1) {
+                    return Math.random() < 0.5 ? 0 : Math.PI;
+                  } else {
+                    return Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2;
+                  }
+                };
+                
+                pos.direction = chooseNewDirection(pos);
+                otherPos.direction = chooseNewDirection(otherPos);
+                
+                setConversations(prev => {
+                  const newConversations = { ...prev };
+                  delete newConversations[conversationId];
+                  return newConversations;
+                });
               }
-            }, BUBBLE_DURATION);
+            }, 30000);
           }
         });
       });
@@ -353,10 +402,28 @@ export default function CitySimulation() {
             TILE_SIZE,
             TILE_SIZE
           );
+        }
+      });
 
-          // Draw interaction bubble if interacting
-          if (pos.isInteracting) {
-            drawBubble(pos.x, pos.y);
+      // Draw conversations separately after drawing avatars
+      Object.entries(conversations).forEach(([id, conversation]) => {
+        if (!conversation?.messages) return;
+        
+        const [idx1, idx2] = id.split('-').map(Number);
+        const pos1 = avatarPositionsRef.current[idx1];
+        const pos2 = avatarPositionsRef.current[idx2];
+        
+        if (pos1?.isInteracting && pos2?.isInteracting) {
+          const elapsedTime = Date.now() - conversation.startTime;
+          const messageIndex = Math.floor(elapsedTime / 3000) % conversation.messages.length;
+          const currentMessage = conversation.messages[messageIndex];
+          
+          if (currentMessage) {
+            if (currentMessage.speaker === AVATARS[idx1].seed) {
+              drawConversation(ctx, pos1.x, pos1.y, currentMessage.message);
+            } else {
+              drawConversation(ctx, pos2.x, pos2.y, currentMessage.message);
+            }
           }
         }
       });
@@ -427,6 +494,14 @@ export default function CitySimulation() {
     }
   };
 
+  const handleConversationEnd = (conversationId) => {
+    setConversations(prev => {
+      const newConversations = { ...prev };
+      delete newConversations[conversationId];
+      return newConversations;
+    });
+  };
+
   return (
     <div className="relative">
       <canvas
@@ -455,6 +530,15 @@ export default function CitySimulation() {
           </div>
         </div>
       )}
+
+      {Object.entries(conversations).map(([id, conversation]) => (
+        <ConversationCard
+          key={id}
+          conversation={conversation}
+          position={conversation.position}
+          onClose={() => handleConversationEnd(id)}
+        />
+      ))}
     </div>
   );
 }
