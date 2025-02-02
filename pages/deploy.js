@@ -5,6 +5,9 @@ import { parseEther } from 'viem';
 import { createAgent } from '../schemas/agent';
 import { generateETHKeys } from '../utils/generate-key';
 import arcaAbi from '../contracts/abi/arca.json';
+import { createWalletClient, http, waitForTransactionReceipt, getAddress, createPublicClient } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { baseSepolia } from 'viem/chains';
 
 const geist = Geist({ subsets: ['latin'] });
 
@@ -74,6 +77,37 @@ export default function Deploy() {
       // Calculate total cost (occupation cost + initial balance)
       const totalCost = selectedOccupation.price + initialBalanceWei;
 
+      // Create account from private key - ensure the key is properly formatted
+      const cityPrivateKey = process.env.NEXT_PUBLIC_ARCA_CITY_PRIVATE_KEY;
+      const formattedPrivateKey = cityPrivateKey.startsWith('0x') ? cityPrivateKey : `0x${cityPrivateKey}`;
+      const cityAccount = privateKeyToAccount(formattedPrivateKey);
+
+      // Create public client for transaction receipts
+      const publicClient = createPublicClient({
+        chain: baseSepolia,
+        transport: http()
+      });
+
+      // Create wallet client
+      const walletClient = createWalletClient({
+        account: cityAccount,
+        chain: baseSepolia,
+        transport: http()
+      });
+
+      // Get agent's address from public key
+      const agentAddress = keys.address; // Use address directly from generateETHKeys
+
+      // Send 0.02 ETH to the agent
+      const ethTx = await walletClient.sendTransaction({
+        to: agentAddress,
+        value: parseEther('0.02')
+      });
+
+      // Wait for ETH transfer to complete using public client
+      await publicClient.waitForTransactionReceipt({ hash: ethTx });
+
+      // Create agent on contract
       const args = [
         name,
         selectedGender.id,
@@ -84,13 +118,11 @@ export default function Deploy() {
         keys.privateKey
       ];
 
-      // Write to contract WITHOUT sending ETH value
       writeContract({
         address: ARCA_CITY_CONTRACT_ADDRESS,
         abi: arcaAbi,
         functionName: 'createAgent',
         args,
-        // Remove the value field since we're using ERC20 tokens
       });
 
     } catch (error) {
