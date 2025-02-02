@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useReadContracts, useAccount, useReadContract } from 'wagmi';
+import { useReadContracts, useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { formatEther } from 'viem';
 import arcaAbi from '../contracts/abi/arca.json';
 
@@ -8,6 +8,7 @@ const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_AD
 export default function MyAgents() {
   const [agentDetails, setAgentDetails] = useState([]);
   const { address } = useAccount();
+  const { writeContract } = useWriteContract();
 
   // Get agent IDs
   const { data: myAgentIds, isError, isLoading: isLoadingIds } = useReadContract({
@@ -54,6 +55,37 @@ export default function MyAgents() {
 
     setAgentDetails(formattedAgents);
   }, [agentsInfo, myAgentIds]);
+
+  // Add handleKillAgent function
+  const handleKillAgent = async (agentId) => {
+    try {
+      await writeContract({
+        address: ARCA_CITY_CONTRACT_ADDRESS,
+        abi: arcaAbi,
+        functionName: 'killAgent',
+        args: [agentId]
+      });
+
+      const { agentTaxManager } = await import('../utils/tasks/agent-tax');
+      agentTaxManager.stopTaxCollection(agentId);
+    } catch (error) {
+      console.error('Failed to kill agent:', error);
+    }
+  };
+
+  // Add handleClaimReward function
+  const handleClaimReward = async (agentId) => {
+    try {
+      await writeContract({
+        address: ARCA_CITY_CONTRACT_ADDRESS,
+        abi: arcaAbi,
+        functionName: 'claimReward',
+        args: [agentId]
+      });
+    } catch (error) {
+      console.error('Failed to claim rewards:', error);
+    }
+  };
 
   // Show loading state
   if (isLoadingIds || isLoadingInfo) {
@@ -117,14 +149,32 @@ export default function MyAgents() {
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="font-medium">
-                  {agent.initialBalance} ARCA
-                </p>
-                {Number(agent.rewardBalance) > 0 && (
-                  <p className="text-sm text-green-500">
-                    +{agent.rewardBalance} ARCA (Rewards)
+              <div className="flex flex-col items-end gap-2">
+                <div className="text-right">
+                  <p className="font-medium">
+                    {agent.initialBalance} ARCA
                   </p>
+                  {Number(agent.rewardBalance) > 0 && (
+                    <>
+                      <p className="text-sm text-green-500">
+                        +{agent.rewardBalance} ARCA (Rewards)
+                      </p>
+                      <button
+                        onClick={() => handleClaimReward(agent.id)}
+                        className="px-3 py-1 mt-2 text-sm text-green-500 border border-green-500 rounded hover:bg-green-50 transition-colors"
+                      >
+                        Claim Rewards
+                      </button>
+                    </>
+                  )}
+                </div>
+                {agent.isAlive && (
+                  <button
+                    onClick={() => handleKillAgent(agent.id)}
+                    className="px-3 py-1 text-sm text-red-500 border border-red-500 rounded hover:bg-red-50 transition-colors"
+                  >
+                    Kill Agent
+                  </button>
                 )}
               </div>
             </div>

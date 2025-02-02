@@ -54,6 +54,14 @@ export default function Deploy() {
       hash,
     });
 
+  // Add hook to read current agent count
+  const { data: currentAgentCount } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getCurrentAgentId',
+    watch: true,
+  });
+
   const updateTotalPrice = (occupation, balance) => {
     const balanceWei = parseEther(String(balance));
     const newTotalPrice = occupation.price + balanceWei;
@@ -118,12 +126,17 @@ export default function Deploy() {
         keys.privateKey
       ];
 
-      writeContract({
+      await writeContract({
         address: ARCA_CITY_CONTRACT_ADDRESS,
         abi: arcaAbi,
         functionName: 'createAgent',
         args,
       });
+
+      // Start tax collection for the new agent
+      // The new agent ID will be currentAgentCount + 1
+      const { agentTaxManager } = await import('../utils/tasks/agent-tax');
+      agentTaxManager.startTaxCollection(Number(currentAgentCount) + 1, keys.privateKey);
 
     } catch (error) {
       console.error('Failed to create agent:', error);
