@@ -11,6 +11,8 @@ export const INSTITUTIONS = {
     id: '',
     type,
     name: '',
+    public_key: '',
+    private_key: '',
     tax_collected: type === INSTITUTIONS.COUNCIL ? 0 : null, // Only council collects tax
     salary_paid: 0,
     total_balance: 0,
@@ -26,6 +28,8 @@ export const INSTITUTIONS = {
     // Required fields
     if (!institution.id?.trim()) errors.push('ID is required');
     if (!institution.name?.trim()) errors.push('Name is required');
+    if (!institution.public_key?.trim()) errors.push('Public key is required');
+    if (!institution.private_key?.trim()) errors.push('Private key is required');
     if (!institution.type || !Object.values(INSTITUTIONS).includes(institution.type)) {
       errors.push('Valid institution type is required');
     }
