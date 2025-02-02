@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // City layout configuration
 const TILE_SIZE = 32; // Each tile is 32x32 pixels
@@ -21,19 +21,45 @@ const BUILDINGS = {
     img: '/assets/bank.png',
     label: 'BANK',
     position: { x: 2, y: 2 },
-    size: { width: 2, height: 2 }
+    size: { width: 2, height: 2 },
+    details: {
+      name: 'City Central Bank',
+      totalBalance: '$10,000,000',
+      totalMembers: '5,000'
+    }
   },
   COURT: {
     img: '/assets/court.png',
     label: 'COURT',
     position: { x: 19, y: 2 },
-    size: { width: 2, height: 2 }
+    size: { width: 2, height: 2 },
+    details: {
+      name: 'Supreme Court',
+      totalBalance: '$2,000,000',
+      totalMembers: '200'
+    }
+  },
+  LAB: {
+    img: '/assets/lab.png',
+    label: 'RESEARCH LAB',
+    position: { x: 2, y: 14 },
+    size: { width: 2, height: 2 },
+    details: {
+      name: 'Advanced Research Lab',
+      totalBalance: '$5,000,000',
+      totalMembers: '300'
+    }
   },
   STADIUM: {
     img: '/assets/stadium.png',
     label: 'STADIUM',
     position: { x: 10, y: 8 },
-    size: { width: 3, height: 3 }
+    size: { width: 3, height: 3 },
+    details: {
+      name: 'City Stadium',
+      totalBalance: '$8,000,000',
+      totalMembers: '50,000'
+    }
   }
 };
 
@@ -71,28 +97,29 @@ const FIXED_HOUSES = [
 const AVATARS = [
   {
     seed: 'John',
-    position: { x: 8, y: 4 }
+    position: { x: 8, y: 4 }  // On vertical road
   },
   {
     seed: 'Alice',
-    position: { x: 16, y: 7 }
+    position: { x: 8, y: 7 }  // On vertical road
   },
-  {
-    seed: 'Bob',
-    position: { x: 8, y: 12 }
-  },
-  {
-    seed: 'Emma',
-    position: { x: 16, y: 14 }
-  },
-  {
-    seed: 'Mike',
-    position: { x: 8, y: 9 }
-  }
 ];
+
+// Adjust movement constants
+const MOVEMENT_SPEED = 0.01; // Tiles per frame
+const INTERACTION_DISTANCE = 1.5; // Tiles
+const BUBBLE_DURATION = 2000; // 2 seconds
 
 export default function CitySimulation() {
   const canvasRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const [hoveredBuilding, setHoveredBuilding] = useState(null);
+  const [selectedBuilding, setSelectedBuilding] = useState(null);
+  const avatarPositionsRef = useRef(AVATARS.map(avatar => ({
+    ...avatar.position,
+    direction: Math.random() * Math.PI * 2, // Random initial direction
+    isInteracting: false
+  })));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -131,6 +158,96 @@ export default function CitySimulation() {
         loadedAssets[`avatar_${avatar.seed}`] = img;
       }
       return loadedAssets;
+    };
+
+    const drawBubble = (x, y) => {
+      ctx.fillStyle = 'white';
+      ctx.strokeStyle = 'black';
+      
+      // Draw bubble
+      ctx.beginPath();
+      ctx.ellipse(
+        x * TILE_SIZE + TILE_SIZE/2,
+        y * TILE_SIZE - TILE_SIZE/2,
+        40,
+        25,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw text
+      ctx.fillStyle = 'black';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        'Hello!',
+        x * TILE_SIZE + TILE_SIZE/2,
+        y * TILE_SIZE - TILE_SIZE/2 + 5
+      );
+    };
+
+    const updateAvatarPositions = () => {
+      const positions = avatarPositionsRef.current;
+      
+      positions.forEach((pos, idx) => {
+        if (pos.isInteracting) return; // Don't move if interacting
+
+        // Calculate new position
+        const newX = pos.x + Math.cos(pos.direction) * MOVEMENT_SPEED;
+        const newY = pos.y + Math.sin(pos.direction) * MOVEMENT_SPEED;
+
+        // Check if new position is near a road (allow some tolerance)
+        const isNearHorizontalRoad = Math.abs(newY - 6) < 0.1 || Math.abs(newY - 12) < 0.1;
+        const isNearVerticalRoad = Math.abs(newX - 8) < 0.1 || Math.abs(newX - 16) < 0.1;
+        const isOnRoad = isNearHorizontalRoad || isNearVerticalRoad;
+
+        // If hitting boundary or off road, change direction
+        if (newX < 0 || newX > GRID_WIDTH - 1 || newY < 0 || newY > GRID_HEIGHT - 1 || !isOnRoad) {
+          // Choose a direction along the current road
+          if (isNearHorizontalRoad) {
+            pos.direction = Math.random() < 0.5 ? 0 : Math.PI; // Move left or right
+          } else if (isNearVerticalRoad) {
+            pos.direction = Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2; // Move up or down
+          } else {
+            pos.direction = Math.random() * Math.PI * 2; // Random direction if lost
+          }
+          return;
+        }
+
+        // Update position
+        pos.x = newX;
+        pos.y = newY;
+
+        // Check for interactions with other avatars
+        positions.forEach((otherPos, otherIdx) => {
+          if (idx === otherIdx) return;
+
+          const distance = Math.sqrt(
+            Math.pow(pos.x - otherPos.x, 2) + 
+            Math.pow(pos.y - otherPos.y, 2)
+          );
+
+          if (distance < INTERACTION_DISTANCE && !pos.isInteracting && !otherPos.isInteracting) {
+            pos.isInteracting = true;
+            otherPos.isInteracting = true;
+
+            // Reset interaction after duration
+            setTimeout(() => {
+              pos.isInteracting = false;
+              otherPos.isInteracting = false;
+              // Choose new direction along the current road
+              if (Math.abs(pos.y - 6) < 0.1 || Math.abs(pos.y - 12) < 0.1) {
+                pos.direction = Math.random() < 0.5 ? 0 : Math.PI;
+              } else {
+                pos.direction = Math.random() < 0.5 ? Math.PI/2 : -Math.PI/2;
+              }
+            }, BUBBLE_DURATION);
+          }
+        });
+      });
     };
 
     const drawCity = (assets) => {
@@ -201,7 +318,7 @@ export default function CitySimulation() {
           );
 
           // Draw label background
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0)';
           ctx.fillRect(
             building.position.x * TILE_SIZE,
             (building.position.y + building.size.height) * TILE_SIZE,
@@ -210,8 +327,8 @@ export default function CitySimulation() {
           );
 
           // Draw label text
-          ctx.fillStyle = 'white';
-          ctx.font = '12px Arial';
+          ctx.fillStyle = 'black';
+          ctx.font = '12px';
           ctx.textAlign = 'center';
           ctx.fillText(
             building.label,
@@ -221,35 +338,123 @@ export default function CitySimulation() {
         }
       });
 
-      // Draw avatars
-      AVATARS.forEach(avatar => {
+      // Update avatar positions
+      updateAvatarPositions();
+
+      // Draw avatars with updated positions
+      avatarPositionsRef.current.forEach((pos, idx) => {
+        const avatar = AVATARS[idx];
         const img = assets[`avatar_${avatar.seed}`];
         if (img) {
           ctx.drawImage(
             img,
-            avatar.position.x * TILE_SIZE,
-            avatar.position.y * TILE_SIZE,
-            TILE_SIZE,  // Avatar size is 1x1 tile
+            pos.x * TILE_SIZE,
+            pos.y * TILE_SIZE,
+            TILE_SIZE,
             TILE_SIZE
           );
+
+          // Draw interaction bubble if interacting
+          if (pos.isInteracting) {
+            drawBubble(pos.x, pos.y);
+          }
         }
       });
     };
 
+    const animate = (assets) => {
+      drawCity(assets);
+      animationFrameRef.current = requestAnimationFrame(() => animate(assets));
+    };
+
     const init = async () => {
       const assets = await loadAssets();
-      drawCity(assets);
+      animate(assets);
     };
 
     init();
+
+    // Cleanup
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, []); // Empty dependency array - only runs once
 
+  const handleCanvasClick = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / (rect.width / GRID_WIDTH);
+    const y = (e.clientY - rect.top) / (rect.height / GRID_HEIGHT);
+
+    // Check if click is within any building
+    Object.entries(BUILDINGS).forEach(([key, building]) => {
+      if (
+        x >= building.position.x &&
+        x <= building.position.x + building.size.width &&
+        y >= building.position.y &&
+        y <= building.position.y + building.size.height
+      ) {
+        setSelectedBuilding(key);
+      }
+    });
+  };
+
+  const handleCanvasMouseMove = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / (rect.width / GRID_WIDTH);
+    const y = (e.clientY - rect.top) / (rect.height / GRID_HEIGHT);
+
+    let isOverBuilding = false;
+    Object.entries(BUILDINGS).forEach(([key, building]) => {
+      if (
+        x >= building.position.x &&
+        x <= building.position.x + building.size.width &&
+        y >= building.position.y &&
+        y <= building.position.y + building.size.height
+      ) {
+        isOverBuilding = true;
+        setHoveredBuilding(key);
+        canvas.style.cursor = 'pointer';
+      }
+    });
+
+    if (!isOverBuilding) {
+      setHoveredBuilding(null);
+      canvas.style.cursor = 'default';
+    }
+  };
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={GRID_WIDTH * TILE_SIZE}
-      height={GRID_HEIGHT * TILE_SIZE}
-      className="w-full rounded-lg"
-    />
+    <div className="relative">
+      <canvas
+        ref={canvasRef}
+        width={GRID_WIDTH * TILE_SIZE}
+        height={GRID_HEIGHT * TILE_SIZE}
+        className="w-full rounded-lg"
+        onClick={handleCanvasClick}
+        onMouseMove={handleCanvasMouseMove}
+      />
+      
+      {selectedBuilding && (
+        <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-lg font-bold">{BUILDINGS[selectedBuilding].details.name}</h3>
+            <button
+              onClick={() => setSelectedBuilding(null)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
+          </div>
+          <div className="space-y-2">
+            <p>Total Balance: {BUILDINGS[selectedBuilding].details.totalBalance}</p>
+            <p>Total Members: {BUILDINGS[selectedBuilding].details.totalMembers}</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
