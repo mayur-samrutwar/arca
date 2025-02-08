@@ -76,9 +76,21 @@ export default function Deploy() {
 
   const handleDeploy = async () => {
     try {
-      const keys = generateETHKeys();
+      // Generate wallet using backend instead of ethers
       const traits = ['ambitious', 'creative', 'determined'];
+      const response = await fetch('http://localhost:3001/generate-wallet', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
 
+      if (!response.ok) {
+        throw new Error('Failed to generate wallet');
+      }
+
+      const { address } = await response.json();
+      
       // Convert balance to wei
       const initialBalanceWei = parseEther(String(initialBalance));
       
@@ -103,28 +115,27 @@ export default function Deploy() {
         transport: http()
       });
 
-      // Get agent's address from public key
-      const agentAddress = keys.address; // Use address directly from generateETHKeys
-
-      // Send 0.02 ETH to the agent
+      // Send 0.02 ETH to the agent using the address from backend
       const ethTx = await walletClient.sendTransaction({
-        to: agentAddress,
+        to: address,
         value: parseEther('0.02')
       });
 
       // Wait for ETH transfer to complete using public client
       await publicClient.waitForTransactionReceipt({ hash: ethTx });
 
-      // Create agent on contract
+      // Create agent on contract using the address from backend
       const args = [
         name,
         selectedGender.id,
         selectedOccupation.id,
         initialBalanceWei,
         traits,
-        keys.address,
-        keys.privateKey
+        address, // Use address from backend
+        "" // Empty private key since we're not using ethers anymore
       ];
+
+      console.log("args", args);
 
       await writeContract({
         address: ARCA_CITY_CONTRACT_ADDRESS,
@@ -133,13 +144,9 @@ export default function Deploy() {
         args,
       });
 
-      // Start tax collection for the new agent
-      // The new agent ID will be currentAgentCount + 1
-      const { agentTaxManager } = await import('../utils/tasks/agent-tax');
-      agentTaxManager.startTaxCollection(Number(currentAgentCount) + 1, keys.privateKey);
-
     } catch (error) {
-      console.error('Failed to create agent:', error);
+      console.error('Deployment failed:', error);
+      setDeploymentStatus(`Deployment failed: ${error.message}`);
     }
   };
 

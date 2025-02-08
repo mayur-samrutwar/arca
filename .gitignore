@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 /agentkit/node_modules
+/agentkit/cdp_api_key.json
 /.pnp
 .pnp.*
 .yarn/*

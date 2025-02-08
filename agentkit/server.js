@@ -1,6 +1,8 @@
 const express = require('express');
 const { CdpWalletProvider } = require('@coinbase/agentkit');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -8,10 +10,14 @@ app.use(cors());
 app.use(express.json());
 
 app.post('/generate-wallet', async (req, res) => {
+  console.log("Generating wallet...");
   try {
+    // Read the CDP API key file
+    const keyFile = JSON.parse(fs.readFileSync(path.join(__dirname, 'cdp_api_key.json'), 'utf8'));
+
     const config = {
-      apiKeyName: process.env.CDP_API_KEY_NAME,
-      apiKeyPrivateKey: process.env.CDP_API_KEY_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      apiKeyName: keyFile.name,
+      apiKeyPrivateKey: keyFile.privateKey,
       networkId: process.env.NETWORK_ID || "base-sepolia",
     };
 

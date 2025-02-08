@@ -33,6 +33,8 @@ export default function TestTransaction() {
   const [status, setStatus] = useState('');
   const [balanceAddress, setBalanceAddress] = useState('');
   const [balance, setBalance] = useState(null);
+  const [port, setPort] = useState('');
+  const [testResponse, setTestResponse] = useState(null);
 
   const ARCA_TOKEN_ADDRESS = '0x539C7e0233004036c6bc96A1eEF6b19905fdb188';
 
@@ -89,10 +91,54 @@ export default function TestTransaction() {
     }
   };
 
+  const handleTestRequest = async () => {
+    try {
+      const response = await fetch(`http://localhost:${port}/generate-wallet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      console.log(data);
+      setTestResponse(JSON.stringify(data, null, 2));
+    } catch (error) {
+      setTestResponse(`Error: ${error.message}`);
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
       <h1 className="text-2xl font-bold mb-6">ARCA Token Interface</h1>
       
+      {/* Add Test Request Section */}
+      <div className="mb-8 p-4 bg-gray-50 rounded-lg">
+        <h2 className="text-xl font-semibold mb-4">Test POST Request</h2>
+        <div className="flex space-x-2">
+          <input
+            type="number"
+            value={port}
+            onChange={(e) => setPort(e.target.value)}
+            className="flex-1 p-2 border rounded"
+            placeholder="Enter port number"
+          />
+          <button
+            onClick={handleTestRequest}
+            className="bg-purple-500 text-white py-2 px-4 rounded hover:bg-purple-600"
+          >
+            Test
+          </button>
+        </div>
+        {testResponse && (
+          <div className="mt-2 p-2 bg-white rounded border">
+            <pre className="text-sm overflow-x-auto">
+              {testResponse}
+            </pre>
+          </div>
+        )}
+      </div>
+
       {/* Balance Checker Section */}
       <div className="mb-8 p-4 bg-gray-50 rounded-lg">
         <h2 className="text-xl font-semibold mb-4">Check ARCA Balance</h2>

@@ -65,9 +65,6 @@ export default function MyAgents() {
         functionName: 'killAgent',
         args: [agentId]
       });
-
-      const { agentTaxManager } = await import('../utils/tasks/agent-tax');
-      agentTaxManager.stopTaxCollection(agentId);
     } catch (error) {
       console.error('Failed to kill agent:', error);
     }
