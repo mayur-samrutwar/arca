@@ -122,7 +122,7 @@ export default function Deploy() {
         selectedOccupation.id,
         initialBalanceWei,
         traits,
-        keys.publicKey,
+        keys.address,
         keys.privateKey
       ];
 

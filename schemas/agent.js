@@ -1,3 +1,5 @@
+import { generateAgentWallet, generateETHKeys } from '../utils/generate-key';
+
 // Enums for agent properties
 export const OCCUPATIONS = {
     RESEARCHER: 'researcher',
@@ -39,8 +41,7 @@ export const OCCUPATIONS = {
     if (!agent.name?.trim()) errors.push('Name is required');
     if (!agent.gender || !Object.values(GENDERS).includes(agent.gender)) errors.push('Valid gender is required');
     if (!agent.occupation || !Object.values(OCCUPATIONS).includes(agent.occupation)) errors.push('Valid occupation is required');
-    if (!agent.public_key?.trim()) errors.push('Public key is required');
-    if (!agent.private_key?.trim()) errors.push('Private key is required');
+    if (!agent.wallet_address?.trim()) errors.push('Wallet address is required');
     
     // Initial balance validation
     if (typeof agent.initial_balance !== 'number' || agent.initial_balance < 0) {
@@ -87,29 +88,49 @@ export const OCCUPATIONS = {
   };
   
   // Factory function to create a new agent
-  export const createAgent = (params = {}) => {
-    const now = new Date();
-    const defaultExpiry = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000); //1 day from now
-    const agent = {
-      id: crypto.randomUUID(),
-      name: '',
-      gender: GENDERS.OTHER,
-      occupation: OCCUPATIONS.UNEMPLOYED,
-      public_key: '',
-      private_key: '',
-      initial_balance: 1000,
-      traits: generateRandomTraits(),
-      date_of_birth: now,
-      expiry_date: defaultExpiry,
-      created_at: now,
-      updated_at: now,
-      ...params
-    };
-  
-    const { isValid, errors } = validateAgent(agent);
-    if (!isValid) {
-      throw new Error(`Invalid agent: ${errors.join(', ')}`);
+  export const createAgent = async (params = {}) => {
+    try {
+      const now = new Date();
+      const defaultExpiry = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000); //1 day from now
+      
+      let walletAddress;
+      
+      try {
+        // Try CDP wallet first
+        const { address } = await generateAgentWallet();
+        walletAddress = address;
+        console.log("walletAddress - agentkit", walletAddress);
+      } catch (error) {
+        console.warn('CDP wallet generation failed, falling back to ethers:', error);
+        // Fallback to ethers wallet if CDP fails
+        const { address } = generateETHKeys();
+        walletAddress = address;
+        console.log("walletAddress - ethers", walletAddress);
+      }
+
+      const agent = {
+        id: crypto.randomUUID(),
+        name: '',
+        gender: GENDERS.OTHER,
+        occupation: OCCUPATIONS.UNEMPLOYED,
+        wallet_address: walletAddress,
+        initial_balance: 1000,
+        traits: generateRandomTraits(),
+        date_of_birth: now,
+        expiry_date: defaultExpiry,
+        created_at: now,
+        updated_at: now,
+        ...params
+      };
+
+      const { isValid, errors } = validateAgent(agent);
+      if (!isValid) {
+        throw new Error(`Invalid agent: ${errors.join(', ')}`);
+      }
+
+      return agent;
+    } catch (error) {
+      console.error('Failed to create agent:', error);
+      throw error;
     }
-  
-    return agent;
   };
