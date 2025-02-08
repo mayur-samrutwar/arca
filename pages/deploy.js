@@ -3,7 +3,6 @@ import { Geist } from 'next/font/google';
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { parseEther } from 'viem';
 import { createAgent } from '../schemas/agent';
-import { generateETHKeys } from '../utils/generate-key';
 import arcaAbi from '../contracts/abi/arca.json';
 import { createWalletClient, http, waitForTransactionReceipt, getAddress, createPublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -30,7 +29,6 @@ const OCCUPATION_OPTIONS = [
   { id: 'banker', name: 'Banker', price: 400n * BigInt(1e18) },
   { id: 'judge', name: 'Judge', price: 600n * BigInt(1e18) },
   { id: 'council', name: 'Council', price: 700n * BigInt(1e18) },
-  { id: 'unemployed', name: 'Unemployed', price: 100n * BigInt(1e18) }
 ];
 
 const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
@@ -44,28 +42,34 @@ export default function Deploy() {
   const [totalPrice, setTotalPrice] = useState(
     OCCUPATION_OPTIONS[0].price + parseEther(String(1000))
   );
+  const [deploymentStatus, setDeploymentStatus] = useState('');
 
-  // Add contract write hook
+  // Add contract write hooks
   const { data: hash, writeContract, isPending } = useWriteContract();
+  const { data: approvalHash, writeContract: writeApproval } = useWriteContract();
 
-  // Add transaction receipt hook
+  // Add transaction receipt hooks
   const { isLoading: isConfirming, isSuccess: isConfirmed } = 
     useWaitForTransactionReceipt({
       hash,
     });
 
-  // Add hook to read current agent count
-  const { data: currentAgentCount } = useReadContract({
-    address: ARCA_CITY_CONTRACT_ADDRESS,
-    abi: arcaAbi,
-    functionName: 'getCurrentAgentId',
-    watch: true,
+  const { 
+    isLoading: isApprovalConfirming, 
+    isSuccess: isApprovalConfirmed 
+  } = useWaitForTransactionReceipt({
+    hash: approvalHash,
   });
 
   const updateTotalPrice = (occupation, balance) => {
-    const balanceWei = parseEther(String(balance));
-    const newTotalPrice = occupation.price + balanceWei;
-    setTotalPrice(newTotalPrice);
+    try {
+      const balanceWei = parseEther(String(balance));
+      const newTotalPrice = occupation.price + balanceWei;
+      console.log('New total price:', newTotalPrice.toString());
+      setTotalPrice(newTotalPrice);
+    } catch (error) {
+      console.error('Error calculating total price:', error);
+    }
   };
 
   const handleBalanceChange = (e) => {
@@ -74,87 +78,22 @@ export default function Deploy() {
     updateTotalPrice(selectedOccupation, newBalance);
   };
 
-  const handleDeploy = async () => {
-    try {
-      // Generate wallet using backend instead of ethers
-      const traits = ['ambitious', 'creative', 'determined'];
-      const response = await fetch('http://localhost:3001/generate-wallet', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+  // Update total price when occupation or balance changes
+  useEffect(() => {
+    updateTotalPrice(selectedOccupation, initialBalance);
+  }, [selectedOccupation, initialBalance]);
 
-      if (!response.ok) {
-        throw new Error('Failed to generate wallet');
-      }
-
-      const { address } = await response.json();
-      
-      // Convert balance to wei
-      const initialBalanceWei = parseEther(String(initialBalance));
-      
-      // Calculate total cost (occupation cost + initial balance)
-      const totalCost = selectedOccupation.price + initialBalanceWei;
-
-      // Create account from private key - ensure the key is properly formatted
-      const cityPrivateKey = process.env.NEXT_PUBLIC_ARCA_CITY_PRIVATE_KEY;
-      const formattedPrivateKey = cityPrivateKey.startsWith('0x') ? cityPrivateKey : `0x${cityPrivateKey}`;
-      const cityAccount = privateKeyToAccount(formattedPrivateKey);
-
-      // Create public client for transaction receipts
-      const publicClient = createPublicClient({
-        chain: baseSepolia,
-        transport: http()
-      });
-
-      // Create wallet client
-      const walletClient = createWalletClient({
-        account: cityAccount,
-        chain: baseSepolia,
-        transport: http()
-      });
-
-      // Send 0.02 ETH to the agent using the address from backend
-      const ethTx = await walletClient.sendTransaction({
-        to: address,
-        value: parseEther('0.02')
-      });
-
-      // Wait for ETH transfer to complete using public client
-      await publicClient.waitForTransactionReceipt({ hash: ethTx });
-
-      // Create agent on contract using the address from backend
-      const args = [
-        name,
-        selectedGender.id,
-        selectedOccupation.id,
-        initialBalanceWei,
-        traits,
-        address, // Use address from backend
-        "" // Empty private key since we're not using ethers anymore
-      ];
-
-      console.log("args", args);
-
-      await writeContract({
-        address: ARCA_CITY_CONTRACT_ADDRESS,
-        abi: arcaAbi,
-        functionName: 'createAgent',
-        args,
-      });
-
-    } catch (error) {
-      console.error('Deployment failed:', error);
-      setDeploymentStatus(`Deployment failed: ${error.message}`);
-    }
-  };
-
-  // Add approval check and function
   const handleApproveAndDeploy = async () => {
     try {
+      if (!totalPrice) {
+        throw new Error('Total price not calculated');
+      }
+
+      console.log('Approving amount:', totalPrice.toString());
+      setDeploymentStatus('Approving ARCA tokens...');
+      
       // First approve ARCA tokens
-      await writeContract({
+      await writeApproval({
         address: process.env.NEXT_PUBLIC_ARCA_TOKEN_ADDRESS,
         abi: [
           {
@@ -172,17 +111,73 @@ export default function Deploy() {
         args: [ARCA_CITY_CONTRACT_ADDRESS, totalPrice]
       });
 
-      // Then create agent
-      handleDeploy();
     } catch (error) {
       console.error('Failed to approve tokens:', error);
+      setDeploymentStatus(`Failed to approve tokens: ${error.message}`);
     }
   };
 
-  // Update initial total price
+  // Add useEffect to handle approval confirmation
   useEffect(() => {
-    updateTotalPrice(OCCUPATION_OPTIONS[0], initialBalance);
-  }, []);
+    if (isApprovalConfirmed) {
+      setDeploymentStatus('Approval confirmed. Creating agent...');
+      handleDeploy();
+    }
+  }, [isApprovalConfirmed]);
+
+  const handleDeploy = async () => {
+    try {
+      console.log("Starting deployment process...");
+      const traits = ['ambitious', 'creative', 'determined'];
+      
+      // Generate wallet
+      console.log("Generating wallet...");
+      const response = await fetch('http://localhost:3001/generate-wallet', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate wallet');
+      }
+
+      const { address } = await response.json();
+      console.log("Generated wallet address:", address);
+      
+      // Convert balance to wei
+      const initialBalanceWei = parseEther(String(initialBalance));
+      console.log("Initial balance in wei:", initialBalanceWei.toString());
+
+      // Prepare agent creation args
+      const args = [
+        name,
+        selectedGender.id,
+        selectedOccupation.id,
+        initialBalanceWei,
+        traits,
+        address
+      ];
+      
+      console.log("Creating agent with args:", args);
+
+      // Create agent
+      await writeContract({
+        address: ARCA_CITY_CONTRACT_ADDRESS,
+        abi: arcaAbi,
+        functionName: 'createAgent',
+        args,
+        value: parseEther('0.02') // Send ETH with the transaction
+      });
+
+      setDeploymentStatus('Agent creation transaction submitted');
+
+    } catch (error) {
+      console.error('Deployment failed:', error);
+      setDeploymentStatus(`Deployment failed: ${error.message}`);
+    }
+  };
 
   const formatPrice = (priceInWei) => {
     return Number(priceInWei) / Number(1e18);
@@ -330,18 +325,26 @@ export default function Deploy() {
         </div>
         <button 
           onClick={handleApproveAndDeploy}
-          disabled={isPending || isConfirming}
+          disabled={isPending || isConfirming || isApprovalConfirming}
           className={`bg-black text-white hover:bg-zinc-900 px-6 py-2 rounded-lg transition-colors text-sm font-medium ${
-            (isPending || isConfirming) ? 'opacity-50 cursor-not-allowed' : ''
+            (isPending || isConfirming || isApprovalConfirming) ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
-          {isPending ? 'Approving...' : 
-           isConfirming ? 'Creating...' : 
+          {isApprovalConfirming ? 'Approving...' : 
+           isPending ? 'Creating...' : 
+           isConfirming ? 'Confirming...' : 
            'Deploy Agent'}
         </button>
       </div>
 
-      {/* Add success message */}
+      {/* Add deployment status message */}
+      {deploymentStatus && (
+        <div className="fixed top-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+          {deploymentStatus}
+        </div>
+      )}
+
+      {/* Success message */}
       {isConfirmed && (
         <div className="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
           Agent created successfully!

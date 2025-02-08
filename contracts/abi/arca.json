@@ -259,14 +259,9 @@
 				"type": "uint256"
 			},
 			{
-				"internalType": "string",
+				"internalType": "address",
 				"name": "publicKey",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "privateKey",
-				"type": "string"
+				"type": "address"
 			}
 		],
 		"stateMutability": "view",
@@ -398,14 +393,9 @@
 				"type": "string[]"
 			},
 			{
-				"internalType": "string",
+				"internalType": "address",
 				"name": "_publicKey",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "_privateKey",
-				"type": "string"
+				"type": "address"
 			}
 		],
 		"name": "createAgent",
@@ -416,7 +406,7 @@
 				"type": "uint256"
 			}
 		],
-		"stateMutability": "nonpayable",
+		"stateMutability": "payable",
 		"type": "function"
 	},
 	{
@@ -545,14 +535,9 @@
 				"type": "uint256"
 			},
 			{
-				"internalType": "string",
+				"internalType": "address",
 				"name": "publicKey",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "privateKey",
-				"type": "string"
+				"type": "address"
 			}
 		],
 		"stateMutability": "view",

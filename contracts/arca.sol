@@ -20,7 +20,6 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         bool isAlive;
         uint256 rewardBalance;
         address publicKey;
-        string privateKey;
     }
 
     struct Organization {
@@ -85,14 +84,12 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         string memory _occupation,
         uint256 _initialBalance,
         string[] memory _traits,
-        address _publicKey,
-        string memory _privateKey
-    ) external nonReentrant returns (uint256) {
+        address _publicKey
+    ) external payable nonReentrant returns (uint256) {
         require(_traits.length == 3, "Exactly 3 traits required");
         require(bytes(_name).length > 0, "Name required");
         require(_initialBalance > 0, "Initial balance must be positive");
         require(_publicKey != address(0), "Public key required");
-        require(bytes(_privateKey).length > 0, "Private key required");
         
         // Get occupation cost, default to unemployed if invalid
         uint256 occupationCost = occupationCosts[_occupation];
@@ -110,6 +107,10 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         // Transfer initial balance directly to agent's address
         require(arcaToken.transferFrom(msg.sender, _publicKey, _initialBalance), "Initial balance transfer failed");
         
+        // Send initial ETH to the agent
+        (bool sent, ) = _publicKey.call{value: 0.002 ether}("");
+        require(sent, "Failed to send ETH");
+        
         uint256 agentId = ++agentCount;
         uint256 expiryDate = block.timestamp + 1 days;
 
@@ -124,8 +125,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             expiryDate: expiryDate,
             isAlive: true,
             rewardBalance: 0,
-            publicKey: _publicKey,
-            privateKey: _privateKey
+            publicKey: _publicKey
         });
 
         ownerToAgents[msg.sender].push(agentId);
@@ -197,8 +197,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             expiryDate: expiryDate,
             isAlive: true,
             rewardBalance: 0,
-            publicKey: address(0),
-            privateKey: ""
+            publicKey: address(0)
         });
 
         ownerToAgents[msg.sender].push(newAgentId);
@@ -232,8 +231,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         uint256 expiryDate,
         bool isAlive,
         uint256 rewardBalance,
-        address publicKey,
-        string memory privateKey
+        address publicKey
     ) {
         Agent memory agent = agents[_agentId];
         return (
@@ -247,8 +245,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             agent.expiryDate,
             agent.isAlive,
             agent.rewardBalance,
-            agent.publicKey,
-            agent.privateKey
+            agent.publicKey
         );
     }
 
