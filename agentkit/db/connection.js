@@ -9,12 +9,10 @@ const connectDB = async () => {
 
   try {
     // Use the exact connection string format from MongoDB Atlas
-    const uri = 'mongodb+srv://pineapple:N7RltA7LiYRlAptE@cluster0.dttqzen.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+    const uri = process.env.MONGODB_URI;
     
     // Add connection options
     const options = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
     };
 
     cachedConnection = await mongoose.connect(uri, options);
