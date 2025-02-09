@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import ConversationCard from './ConversationCard';
 import { useReadContract, useReadContracts, useAccount } from 'wagmi';
 import arcaAbi from '../contracts/abi/arca.json';
+import CourtInfo from './buildings/CourtInfo';
+import LabInfo from './buildings/LabInfo';
+import StadiumInfo from './buildings/StadiumInfo';
 
 // City layout configuration
 const TILE_SIZE = 32; // Each tile is 32x32 pixels
@@ -606,50 +609,27 @@ export default function CitySimulation() {
       />
       
       {selectedBuilding && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold">
-          {BUILDINGS[selectedBuilding].details.name}
-        </h3>
-        <button
-          onClick={() => setSelectedBuilding(null)}
-          className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      
-      <div className="space-y-4">
-        {/* Employee List */}
-        <div className="space-y-2">
-          <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400">Employees</h4>
-          <div className="max-h-96 overflow-y-auto space-y-2">
-            {agentsInfo?.filter(info => {
-              const occupation = info.result[3]; // occupation is at index 3 in getAgentInfo return
-              if (selectedBuilding === 'COURT' && occupation === 'judge') return true;
-              if (selectedBuilding === 'LAB' && occupation === 'researcher') return true;
-              return false;
-            }).map((info, index) => (
-              <div key={index} className="flex items-center space-x-3 p-2 rounded-lg border border-gray-200 dark:border-gray-700">
-                <img
-                  src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${info.result[0]}`}
-                  alt={info.result[0]}
-                  className="w-10 h-10 rounded-full"
-                />
-                <div>
-                  <div className="font-medium">{info.result[0]}</div>
-                  <div className="text-sm text-gray-500 capitalize">{info.result[3]}</div>
-                </div>
-              </div>
-            ))}
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">
+                {BUILDINGS[selectedBuilding].details.name}
+              </h3>
+              <button
+                onClick={() => setSelectedBuilding(null)}
+                className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {selectedBuilding === 'COURT' && <CourtInfo agentsInfo={agentsInfo} />}
+            {selectedBuilding === 'LAB' && <LabInfo agentsInfo={agentsInfo} />}
+            {selectedBuilding === 'STADIUM' && <StadiumInfo />}
           </div>
         </div>
-      </div>
-    </div>
-  </div>
       )}
 
       {Object.entries(conversations).map(([id, conversation]) => (
