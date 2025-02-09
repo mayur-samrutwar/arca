@@ -33,6 +33,7 @@ export default function SnakeGame({ onScoreChange }) {
   };
 
   const handleKeyPress = (e) => {
+    if (gameOver) return; // Ignore inputs when game is over
     const { x, y } = directionRef.current;
     
     switch(e.key) {
@@ -64,6 +65,14 @@ export default function SnakeGame({ onScoreChange }) {
   };
 
   const updateGame = () => {
+    if (gameOver) {
+      if (gameLoopRef.current) {
+        clearTimeout(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
+      return;
+    }
+
     const snake = [...snakeRef.current];
     const head = {
       x: snake[0].x + directionRef.current.x,
@@ -72,6 +81,10 @@ export default function SnakeGame({ onScoreChange }) {
 
     if (checkCollision(head)) {
       setGameOver(true);
+      if (gameLoopRef.current) {
+        clearTimeout(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
       return;
     }
 
@@ -90,9 +103,13 @@ export default function SnakeGame({ onScoreChange }) {
   };
 
   const drawGame = () => {
+    if (gameOver) return; // Don't draw if game is over
+    
     const canvas = canvasRef.current;
+    if (!canvas) return; // Don't draw if canvas doesn't exist
+    
     const ctx = canvas.getContext('2d');
-
+    
     // Clear canvas
     ctx.fillStyle = '#f0f0f0';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -134,8 +151,10 @@ export default function SnakeGame({ onScoreChange }) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = GRID_SIZE * CELL_SIZE;
-    canvas.height = GRID_SIZE * CELL_SIZE;
+    if (canvas && !gameOver) {
+      canvas.width = GRID_SIZE * CELL_SIZE;
+      canvas.height = GRID_SIZE * CELL_SIZE;
+    }
     
     window.addEventListener('keydown', handleKeyPress);
     
@@ -149,7 +168,7 @@ export default function SnakeGame({ onScoreChange }) {
     <div className="flex flex-col items-center gap-4">
       <div className="flex justify-between w-full px-4">
         <div className="text-lg font-medium">Score: {score}</div>
-        {!gameStarted && (
+        {!gameStarted && !gameOver && (
           <button
             onClick={startGame}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
@@ -157,23 +176,22 @@ export default function SnakeGame({ onScoreChange }) {
             Start Game
           </button>
         )}
-        {gameOver && (
-          <button
-            onClick={startGame}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            Play Again
-          </button>
-        )}
       </div>
       
-      <canvas
-        ref={canvasRef}
-        className="border border-gray-200 rounded-lg"
-      />
-      
-      {gameOver && (
-        <div className="text-red-500 font-medium">Game Over! Score: {score}</div>
+      {!gameOver ? (
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            className="border border-gray-200 rounded-lg"
+          />
+        </div>
+      ) : (
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+            <div className="text-3xl font-bold text-red-500 mb-4">Game Over!</div>
+            <div className="text-2xl">Final Score: {score}</div>
+          </div>
+        </div>
       )}
     </div>
   );
