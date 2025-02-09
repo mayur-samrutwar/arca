@@ -128,81 +128,134 @@ export default function MyAgents() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">My Agent</h1>
+        <h1 className="text-2xl font-bold">My Agent Profile</h1>
         <div className="text-sm text-gray-500">
           Connected: {address.slice(0, 6)}...{address.slice(-4)}
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {agentDetails ? (
-          <div
-            className="p-4 rounded-lg border border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20 transition-colors"
-          >
-            <div className="flex items-center justify-between">
+      {agentDetails ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+          {/* Header Section */}
+          <div className="relative h-32 bg-gradient-to-r from-blue-500 to-purple-500">
+            <div className="absolute -bottom-16 left-8">
+              <img
+                src={`https://api.dicebear.com/7.x/personas/svg?seed=${agentDetails.name}`}
+                alt={agentDetails.name}
+                className="w-32 h-32 rounded-xl border-4 border-white dark:border-gray-800 bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Content Section */}
+          <div className="pt-20 px-8 pb-8">
+            {/* Agent Status and Actions */}
+            <div className="flex justify-between items-start mb-6">
               <div>
-                <h3 className="font-medium">{agentDetails.name}</h3>
-                <div className="flex items-center gap-2 mt-1">
+                <h2 className="text-2xl font-bold mb-1">{agentDetails.name}</h2>
+                <div className="flex items-center gap-2">
                   <span className={`inline-block w-2 h-2 rounded-full ${
                     agentDetails.isAlive ? 'bg-green-500' : 'bg-red-500'
                   }`} />
-                  <span className="text-sm text-foreground/70">
-                    {agentDetails.isAlive ? 'Active' : 'Inactive'}
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {agentDetails.isAlive ? 'Active Agent' : 'Inactive Agent'}
                   </span>
                 </div>
-                <div className="mt-2">
-                  <p className="text-sm text-foreground/70">
-                    Occupation: <span className="capitalize">{agentDetails.occupation}</span>
-                  </p>
-                  <p className="text-sm text-foreground/70">
-                    Traits: {agentDetails.traits.join(', ')}
-                  </p>
-                </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="text-right">
-                  <p className="font-medium">
-                    {agentDetails.initialBalance} ARCA
-                  </p>
-                  <button
-                    onClick={() => setShowWithdrawModal(true)}
-                    className="px-3 py-1 mt-2 text-sm text-blue-500 border border-blue-500 rounded hover:bg-blue-50 transition-colors"
-                  >
-                    Withdraw
-                  </button>
-                  {Number(agentDetails.rewardBalance) > 0 && (
-                    <>
-                      <p className="text-sm text-green-500">
-                        +{agentDetails.rewardBalance} ARCA (Rewards)
-                      </p>
-                      <button
-                        onClick={() => handleClaimReward(agentDetails.id)}
-                        className="px-3 py-1 mt-2 text-sm text-green-500 border border-green-500 rounded hover:bg-green-50 transition-colors"
-                      >
-                        Claim Rewards
-                      </button>
-                    </>
-                  )}
-                </div>
+              <div className="flex gap-3">
                 {agentDetails.isAlive && (
                   <button
                     onClick={() => setShowKillWarning(true)}
-                    className="px-3 py-1 text-sm text-red-500 border border-red-500 rounded hover:bg-red-50 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-red-500 border border-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   >
                     Kill Agent
                   </button>
                 )}
               </div>
             </div>
+
+            {/* Agent Details Grid */}
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              {/* Left Column */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Occupation</h3>
+                  <p className="mt-1 text-lg capitalize">{agentDetails.occupation}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Gender</h3>
+                  <p className="mt-1 text-lg capitalize">{agentDetails.gender}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Traits</h3>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {agentDetails.traits.map((trait, index) => (
+                      <span 
+                        key={index}
+                        className="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-full"
+                      >
+                        {trait}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Financial Info */}
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Balance</h3>
+                  <p className="mt-1 text-2xl font-bold">{agentDetails.initialBalance} ARCA</p>
+                  <button
+                    onClick={() => setShowWithdrawModal(true)}
+                    className="mt-2 px-4 py-2 w-full text-sm font-medium text-blue-500 border border-blue-500 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  >
+                    Withdraw
+                  </button>
+                </div>
+
+                {Number(agentDetails.rewardBalance) > 0 && (
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <h3 className="text-sm font-medium text-green-600 dark:text-green-400">Available Rewards</h3>
+                    <p className="mt-1 text-2xl font-bold text-green-600 dark:text-green-400">
+                      {agentDetails.rewardBalance} ARCA
+                    </p>
+                    <button
+                      onClick={() => handleClaimReward(agentDetails.id)}
+                      className="mt-2 px-4 py-2 w-full text-sm font-medium text-green-500 border border-green-500 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                    >
+                      Claim Rewards
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Timeline Info */}
+            <div className="border-t dark:border-gray-700 pt-6">
+              <div className="flex gap-8">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Created</h3>
+                  <p className="mt-1">{agentDetails.birthDate.toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Expires</h3>
+                  <p className="mt-1">{agentDetails.expiryDate.toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="text-center py-8 text-foreground/70">
+        </div>
+      ) : (
+        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+          <h3 className="text-xl font-medium mb-2">No Agent Found</h3>
+          <p className="text-gray-600 dark:text-gray-300">
             You don't have an agent yet. Create one to get started!
-          </div>
-        )}
-      </div>
+          </p>
+        </div>
+      )}
 
       {/* Kill Warning Modal */}
       {showKillWarning && (

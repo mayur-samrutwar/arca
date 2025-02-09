@@ -25,11 +25,11 @@ const CITY_LAYOUT = Array(GRID_HEIGHT).fill().map((_, y) =>
 const BUILDINGS = {
   COURT: {
     img: '/assets/court.png',
-    label: 'COURT',
+    label: 'COUNCIL',
     position: { x: 19, y: 2 },
     size: { width: 2, height: 2 },
     details: {
-      name: 'Supreme Court',
+      name: 'Arca City Council',
       totalBalance: '$2,000,000',
       totalMembers: '200'
     }

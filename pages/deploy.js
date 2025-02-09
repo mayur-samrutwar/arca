@@ -190,7 +190,7 @@ export default function Deploy() {
         selectedOccupation.id,
         initialBalanceWei,
         traits,
-        agentAddress // Use the generated agent address
+        agentAddress 
       ];
       
       console.log("Creating agent with args:", args);
@@ -201,7 +201,7 @@ export default function Deploy() {
         abi: arcaAbi,
         functionName: 'createAgent',
         args,
-        value: parseEther('0.02') // Send ETH with the transaction
+        value: parseEther('0.02') 
       });
 
       setDeploymentStatus('Agent creation transaction submitted');

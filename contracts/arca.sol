@@ -20,6 +20,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         bool isAlive;
         uint256 rewardBalance;
         address publicKey;
+        uint256 reputation;
     }
 
     struct Organization {
@@ -58,6 +59,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
     event AgentBirth(uint256 indexed parentAgentId, uint256 indexed newAgentId);
     event RewardClaimed(uint256 indexed agentId, uint256 amount);
     event OccupationCostSet(string occupation, uint256 cost);
+    event ReputationUpdated(uint256 indexed agentId, uint256 oldReputation, uint256 newReputation);
 
     constructor(address _arcaToken) Ownable(msg.sender) {
         arcaToken = IERC20(_arcaToken);
@@ -130,7 +132,8 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             expiryDate: expiryDate,
             isAlive: true,
             rewardBalance: 0,
-            publicKey: _publicKey
+            publicKey: _publicKey,
+            reputation: 20
         });
 
         ownerAgent[msg.sender] = agentId;
@@ -205,7 +208,8 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             expiryDate: expiryDate,
             isAlive: true,
             rewardBalance: 0,
-            publicKey: address(0)
+            publicKey: address(0),
+            reputation: 20
         });
 
         ownerAgent[msg.sender] = newAgentId;
@@ -239,7 +243,8 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         uint256 expiryDate,
         bool isAlive,
         uint256 rewardBalance,
-        address publicKey
+        address publicKey,
+        uint256 reputation
     ) {
         Agent memory agent = agents[_agentId];
         return (
@@ -253,7 +258,8 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             agent.expiryDate,
             agent.isAlive,
             agent.rewardBalance,
-            agent.publicKey
+            agent.publicKey,
+            agent.reputation
         );
     }
 
@@ -373,5 +379,16 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         
         // Transfer ARCA tokens to owner
         require(arcaToken.transfer(msg.sender, _amount), "Transfer failed");
+    }
+
+    function updateAgentReputation(uint256 _agentId, uint256 _newReputation) external {
+        require(msg.sender == owner() || msg.sender == agents[_agentId].owner, "Not authorized");
+        require(agents[_agentId].isAlive, "Agent not alive");
+        require(_newReputation >= 0 && _newReputation <= 100, "Reputation must be between 0 and 100");
+        
+        uint256 oldReputation = agents[_agentId].reputation;
+        agents[_agentId].reputation = _newReputation;
+        
+        emit ReputationUpdated(_agentId, oldReputation, _newReputation);
     }
 }

@@ -57,6 +57,25 @@ export default function LabInfo({ agentsInfo }) {
 
   return (
     <div className="p-6 max-h-[calc(100vh-4rem)] overflow-y-auto">
+      <div className="mb-6">
+        <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-3">Current Researchers</h4>
+        <div className="grid grid-cols-2 gap-4">
+          {researchers.map((info, index) => (
+            <div key={index} className="flex items-center space-x-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <img
+                src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${info.result[0]}`}
+                alt={info.result[0]}
+                className="w-12 h-12 rounded-full"
+              />
+              <div>
+                <div className="font-medium">{info.result[0]}</div>
+                <div className="text-sm text-gray-500 capitalize">{info.result[3]}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <button
         onClick={startResearch}
         disabled={isResearching}
