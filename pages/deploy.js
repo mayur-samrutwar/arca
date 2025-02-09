@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Geist } from 'next/font/google';
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, useReadContract, useAccount } from 'wagmi';
 import { parseEther } from 'viem';
 import { createAgent } from '../schemas/agent';
 import arcaAbi from '../contracts/abi/arca.json';
@@ -34,6 +34,8 @@ const OCCUPATION_OPTIONS = [
 const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
 
 export default function Deploy() {
+  const { address } = useAccount();
+
   const [name, setName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_OPTIONS[0]);
   const [selectedGender, setSelectedGender] = useState(GENDER_OPTIONS[0]);
@@ -127,24 +129,31 @@ export default function Deploy() {
 
   const handleDeploy = async () => {
     try {
+      if (!address) {
+        throw new Error('Please connect your wallet first');
+      }
+
       console.log("Starting deployment process...");
       const traits = ['ambitious', 'creative', 'determined'];
       
-      // Generate wallet
+      // Generate wallet with owner address
       console.log("Generating wallet...");
       const response = await fetch('http://localhost:3001/generate-wallet', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify({
+          ownerAddress: address // Now address is properly defined
+        })
       });
 
       if (!response.ok) {
         throw new Error('Failed to generate wallet');
       }
 
-      const { address } = await response.json();
-      console.log("Generated wallet address:", address);
+      const { address: agentAddress } = await response.json();
+      console.log("Generated wallet address:", agentAddress);
       
       // Convert balance to wei
       const initialBalanceWei = parseEther(String(initialBalance));
@@ -157,7 +166,7 @@ export default function Deploy() {
         selectedOccupation.id,
         initialBalanceWei,
         traits,
-        address
+        agentAddress // Use the generated agent address
       ];
       
       console.log("Creating agent with args:", args);
@@ -172,7 +181,6 @@ export default function Deploy() {
       });
 
       setDeploymentStatus('Agent creation transaction submitted');
-
     } catch (error) {
       console.error('Deployment failed:', error);
       setDeploymentStatus(`Deployment failed: ${error.message}`);

@@ -1,41 +1,62 @@
 import OpenAI from 'openai';
-import { personalActions } from '@/utils/personal';
-import { parseEther } from 'viem';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
-
-const ARCA_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_ARCA_TOKEN_ADDRESS;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { message, privateKey, agentAddress } = req.body;
+  const { message, agentAddress, ownerAddress } = req.body;
 
-  if (!message || !privateKey || !agentAddress) {
-    return res.status(400).json({ error: 'Message, private key, and agent address are required' });
+  if (!message || !agentAddress || !ownerAddress) {
+    return res.status(400).json({ error: 'Message, agent address, and owner address are required' });
   }
 
   try {
     const systemPrompt = `You are a helper that interprets user messages to determine which function to call.
     Available functions are:
     - transfer(recipientAddress, amount)
-    - donate(organizationAddress, amount)
-    - payRent(landlordAddress, amount)
-    - sendGift(recipientAddress, amount)
     - checkBalance(address)
+    - getWalletAddress()
 
-    For checkBalance, if no address is specified, use the keyword "sender" as the address parameter.
+    For checkBalance, if no address is specified or if the user asks about "my balance", use the keyword "sender" as the address parameter.
+
+    When users ask about their wallet address or say "What is your wallet address?", use the getWalletAddress action.
 
     Return ONLY a JSON object with the following structure:
     {
-      "function": "functionName",
+      "action": "actionName",
       "params": {
         "address": "sender" or "0x...",
-        "amount": "10" // only for transfer functions
+        "amount": "10",
+        "recipientAddress": "0x..."
+      }
+    }
+
+    Example responses:
+    For "What's my balance?":
+    {
+      "action": "checkBalance",
+      "params": {
+        "address": "sender"
+      }
+    }
+
+    For "What is your wallet address?":
+    {
+      "action": "getWalletAddress",
+      "params": {}
+    }
+
+    For "Transfer 10 ARCA to 0x123...":
+    {
+      "action": "transfer",
+      "params": {
+        "amount": "10",
+        "recipientAddress": "0x123..."
       }
     }`;
 
@@ -51,70 +72,27 @@ export default async function handler(req, res) {
 
     const action = JSON.parse(completion.choices[0].message.content);
     
-    // Handle the "sender" keyword for checkBalance
-    if (action.function === 'checkBalance' && action.params.address === 'sender') {
-      action.params.address = agentAddress;
-    }
-
-    console.log('Executing action:', action);
-
-    // Execute the appropriate function
-    let result;
-    switch (action.function) {
-      case 'checkBalance':
-        result = await personalActions.checkBalance(action.params.address);
-        break;
-
-      case 'transfer':
-        result = await personalActions.transfer(
-          privateKey,
-          action.params.recipientAddress,
-          action.params.amount
-        );
-        break;
-
-      case 'donate':
-        result = await personalActions.donate(
-          privateKey,
-          action.params.organizationAddress,
-          action.params.amount
-        );
-        break;
-
-      case 'payRent':
-        result = await personalActions.payRent(
-          privateKey,
-          action.params.landlordAddress,
-          action.params.amount
-        );
-        break;
-
-      case 'sendGift':
-        result = await personalActions.sendGift(
-          privateKey,
-          action.params.recipientAddress,
-          action.params.amount
-        );
-        break;
-
-      default:
-        throw new Error('Unknown function');
-    }
-
-    // Format the response for checkBalance
-    const response = {
-      success: true,
-      action: action.function,
-      result: action.function === 'checkBalance' ? `${result} ARCA` : result
-    };
-
-    res.status(200).json(response);
-
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
+    // Call agent-action endpoint
+    const actionResponse = await fetch('http://localhost:3001/agent-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentAddress,
+        ownerAddress,
+        action: action.action,
+        params: action.params
+      })
     });
+
+    const actionData = await actionResponse.json();
+    
+    if (!actionResponse.ok) {
+      throw new Error(actionData.error || 'Action failed');
+    }
+
+    res.json(actionData);
+  } catch (error) {
+    console.error('Chat action failed:', error);
+    res.status(500).json({ error: error.message });
   }
 }

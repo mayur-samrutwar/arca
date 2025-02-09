@@ -1,24 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
 import { useReadContract, useAccount } from 'wagmi';
 import arcaAbi from '../contracts/abi/arca.json';
-import { keccak256 } from 'ethereum-cryptography/keccak';
-import { hexlify } from 'ethers';
 
 const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS;
 
 export default function AgentChat() {
+  const { address: ownerAddress } = useAccount();
   const [isMinimized, setIsMinimized] = useState(true);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
-  const { address } = useAccount();
+  const [agent, setAgent] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   // Get agent IDs
   const { data: myAgentIds } = useReadContract({
     address: ARCA_CITY_CONTRACT_ADDRESS,
     abi: arcaAbi,
     functionName: 'getMyAgents',
-    account: address,
+    account: ownerAddress,
     watch: true,
   });
 
@@ -27,7 +27,7 @@ export default function AgentChat() {
     address: ARCA_CITY_CONTRACT_ADDRESS,
     abi: arcaAbi,
     functionName: 'getAgentInfo',
-    args: myAgentIds?.[0] ? [myAgentIds[0]] : undefined,
+    args: myAgentIds?.[2] ? [myAgentIds[2]] : undefined,
     enabled: Boolean(myAgentIds?.length),
   });
 
@@ -41,20 +41,61 @@ export default function AgentChat() {
 
   useEffect(() => {
     if (agentInfo) {
-      // Add initial message when agent info is loaded
-      setMessages([{
-        type: 'agent',
-        content: `Hello! I'm your AI agent ${agentInfo[0]}. I'll help you manage your ARCA tokens.`,
-        timestamp: new Date(),
-      }]);
+      initializeAgent(agentInfo[10]); // publicKey from smart contract
     }
   }, [agentInfo]);
 
+  const initializeAgent = async (agentAddress) => {
+    try {
+      if (!ownerAddress) {
+        throw new Error('Please connect your wallet first');
+      }
+
+      setIsInitializing(true);
+      
+      // Initialize server-side wallet for this agent
+      const response = await fetch('http://localhost:3001/init-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          agentAddress,
+          ownerAddress // Add the owner's address
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initialize agent');
+      }
+
+      if (!data.success) {
+        throw new Error('Agent initialization failed');
+      }
+
+      setMessages([{
+        type: 'agent',
+        content: 'Hello! I am ready to help you with your transactions.',
+        timestamp: new Date()
+      }]);
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages([{
+        type: 'agent',
+        content: `Error: ${error.message}. Please try again later.`,
+        timestamp: new Date()
+      }]);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || !agentInfo) return;
+    if (!input.trim() || !agentInfo || !ownerAddress) return;
 
-    // Add user message
+    const agentAddress = agentInfo[10]; // publicKey is at index 10
+
     setMessages(prev => [...prev, {
       type: 'user',
       content: input,
@@ -62,49 +103,22 @@ export default function AgentChat() {
     }]);
 
     try {
-      const privateKey = agentInfo[11];
-      const publicKey = agentInfo[10];
-      
-      // Convert public key to bytes and hash it
-      const publicKeyBytes = Buffer.from(publicKey);
-      const hashedPubKey = keccak256(publicKeyBytes);
-      
-      // Take last 20 bytes and format as hex address
-      const agentAddress = `0x${Buffer.from(hashedPubKey.slice(-20)).toString('hex')}`;
-
-      // Debug logs
-      console.log('Agent Details:', {
-        address: agentAddress,
-        privateKey: privateKey,
-        publicKey: publicKey,
-        message: input
-      });
-
-      // Call our API endpoint
       const response = await fetch('/api/chat-action', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: input,
-          privateKey: privateKey,
-          agentAddress: agentAddress,
+          agentAddress,
+          ownerAddress
         })
       });
 
       const data = await response.json();
 
-      // Log API response
-      console.log('API Response:', data);
-
-      // Add agent response
       setMessages(prev => [...prev, {
         type: 'agent',
         content: data.success 
-          ? data.action === 'checkBalance'
-            ? `Your current balance is ${data.result}`
-            : `Successfully executed ${data.action}. Transaction hash: ${data.result}`
+          ? `Action completed successfully: ${JSON.stringify(data.result)}`
           : `Sorry, there was an error: ${data.error}`,
         timestamp: new Date(),
       }]);
@@ -125,7 +139,16 @@ export default function AgentChat() {
   if (!agentInfo) {
     return (
       <div className="fixed bottom-4 right-4 z-50 w-80 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg p-4">
-        {!address ? "Please connect your wallet" : "Loading your agent..."}
+        {!ownerAddress ? "Please connect your wallet" : "Loading your agent..."}
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isInitializing) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 w-80 bg-background border border-black/10 dark:border-white/10 rounded-lg shadow-lg p-4">
+        Initializing agent...
       </div>
     );
   }
