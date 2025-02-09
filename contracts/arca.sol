@@ -43,7 +43,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
 
     mapping(uint256 => Agent) public agents;
     mapping(uint256 => Organization) public organizations;
-    mapping(address => uint256[]) public ownerToAgents;
+    mapping(address => uint256) public ownerAgent;
     
     City public city;
     uint256 public agentCount;
@@ -61,6 +61,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
 
     constructor(address _arcaToken) Ownable(msg.sender) {
         arcaToken = IERC20(_arcaToken);
+        initializeOccupationCosts();
     }
 
     function createCity(string memory _name, uint256 _maxPopulation) external onlyOwner {
@@ -86,6 +87,10 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         string[] memory _traits,
         address _publicKey
     ) external payable nonReentrant returns (uint256) {
+        require(
+            ownerAgent[msg.sender] == 0 || !agents[ownerAgent[msg.sender]].isAlive,
+            "User already has a living agent"
+        );
         require(_traits.length == 3, "Exactly 3 traits required");
         require(bytes(_name).length > 0, "Name required");
         require(_initialBalance > 0, "Initial balance must be positive");
@@ -128,7 +133,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             publicKey: _publicKey
         });
 
-        ownerToAgents[msg.sender].push(agentId);
+        ownerAgent[msg.sender] = agentId;
         city.currentPopulation++;
         
         emit AgentCreated(agentId, msg.sender, _name);
@@ -140,6 +145,9 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         require(msg.sender == agents[_agentId].owner || msg.sender == owner(), "Not authorized");
         
         agents[_agentId].isAlive = false;
+        if (msg.sender == agents[_agentId].owner) {
+            ownerAgent[msg.sender] = 0;
+        }
         city.currentPopulation--;
         
         emit AgentKilled(_agentId);
@@ -200,7 +208,7 @@ contract ArcaCity is Ownable, ReentrancyGuard {
             publicKey: address(0)
         });
 
-        ownerToAgents[msg.sender].push(newAgentId);
+        ownerAgent[msg.sender] = newAgentId;
         city.currentPopulation++;
         
         emit AgentBirth(_parentAgentId, newAgentId);
@@ -268,8 +276,8 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         return liveAgents;
     }
 
-    function getMyAgents() external view returns (uint256[] memory) {
-        return ownerToAgents[msg.sender];
+    function getMyAgent() external view returns (uint256) {
+        return ownerAgent[msg.sender];
     }
 
     function getOrgInfo(uint256 _orgId) external view returns (
@@ -339,5 +347,31 @@ contract ArcaCity is Ownable, ReentrancyGuard {
         }
         
         return (occList, costList);
+    }
+
+    function withdrawTokens(uint256 _amount) external onlyOwner {
+        require(_amount > 0, "Amount must be positive");
+        require(_amount <= arcaToken.balanceOf(address(this)), "Insufficient balance");
+        require(arcaToken.transfer(msg.sender, _amount), "Transfer failed");
+    }
+
+    function withdrawEth() external onlyOwner {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No ETH balance");
+        (bool sent, ) = msg.sender.call{value: balance}("");
+        require(sent, "Failed to send ETH");
+    }
+
+    function withdrawFromAgent(uint256 _agentId, uint256 _amount) external nonReentrant {
+        require(agents[_agentId].isAlive, "Agent not alive");
+        require(agents[_agentId].owner == msg.sender, "Not agent owner");
+        require(_amount > 0, "Amount must be positive");
+        require(_amount <= agents[_agentId].initialBalance, "Insufficient balance");
+
+        // Update agent's balance
+        agents[_agentId].initialBalance -= _amount;
+        
+        // Transfer ARCA tokens to owner
+        require(arcaToken.transfer(msg.sender, _amount), "Transfer failed");
     }
 }

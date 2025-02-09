@@ -35,7 +35,7 @@ const ARCA_CITY_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_AD
 
 export default function Deploy() {
   const { address } = useAccount();
-
+  const [hasExistingAgent, setHasExistingAgent] = useState(false);
   const [name, setName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_OPTIONS[0]);
   const [selectedGender, setSelectedGender] = useState(GENDER_OPTIONS[0]);
@@ -62,6 +62,30 @@ export default function Deploy() {
   } = useWaitForTransactionReceipt({
     hash: approvalHash,
   });
+
+  // Add check for existing agent
+  const { data: existingAgentId } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getMyAgent',
+    account: address,
+    watch: true,
+  });
+
+  // Add check for agent's alive status if they have one
+  const { data: agentInfo } = useReadContract({
+    address: ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getAgentInfo',
+    args: existingAgentId ? [existingAgentId] : undefined,
+    enabled: Boolean(existingAgentId),
+  });
+
+  useEffect(() => {
+    if (existingAgentId && agentInfo) {
+      setHasExistingAgent(agentInfo[8]); // isAlive is at index 8
+    }
+  }, [existingAgentId, agentInfo]);
 
   const updateTotalPrice = (occupation, balance) => {
     try {
@@ -191,172 +215,195 @@ export default function Deploy() {
     return Number(priceInWei) / Number(1e18);
   };
 
+  // Render content based on hasExistingAgent
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-normal mb-8">Deploy Agent</h1>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-6 max-h-[calc(100vh-12rem)] overflow-y-auto pr-4">
-          {/* Name Input */}
-          <div className="border border-zinc-200 p-6 rounded-lg">
-            <h2 className="text-sm font-medium mb-4">Name</h2>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter agent name"
-              className="w-full border border-zinc-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
-            />
-          </div>
-
-          {/* Avatar Selection */}
-          <div className="border border-zinc-200 p-6 rounded-lg">
-            <h2 className="text-sm font-medium mb-4">Avatar</h2>
-            <div className="grid grid-cols-4 gap-3">
-              {AVATAR_OPTIONS.map((avatar) => (
-                <button
-                  key={avatar.id}
-                  onClick={() => setSelectedAvatar(avatar)}
-                  className={`p-2 rounded-lg border transition-all ${
-                    selectedAvatar.id === avatar.id
-                      ? 'border-black shadow-sm'
-                      : 'border-zinc-200 hover:border-zinc-300'
-                  }`}
-                >
-                  <img
-                    src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${avatar.seed}`}
-                    alt={`Avatar ${avatar.id}`}
-                    className="w-12 h-12 mx-auto"
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Gender Selection */}
-          <div className="border border-zinc-200 p-6 rounded-lg">
-            <h2 className="text-sm font-medium mb-4">Gender</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {GENDER_OPTIONS.map((gender) => (
-                <button
-                  key={gender.id}
-                  onClick={() => setSelectedGender(gender)}
-                  className={`p-4 rounded-lg transition-all ${
-                    selectedGender.id === gender.id
-                      ? 'border border-black  shadow-sm'
-                      : 'border border-zinc-200 hover:border-zinc-300'
-                  }`}
-                >
-                  <div className="text-sm">{gender.name}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Occupation Selection */}
-          <div className="border border-zinc-200 p-6 rounded-lg">
-            <h2 className="text-sm font-medium mb-4">Occupation</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {OCCUPATION_OPTIONS.map((occupation) => (
-                <button
-                  key={occupation.id}
-                  onClick={() => {
-                    setSelectedOccupation(occupation);
-                    updateTotalPrice(occupation, initialBalance);
-                  }}
-                  className={`p-4 rounded-lg border ${
-                    selectedOccupation.id === occupation.id
-                      ? 'border-black'
-                      : 'border-zinc-200 hover:border-zinc-300'
-                  }`}
-                >
-                  <div className="text-sm">{occupation.name}</div>
-                  <div className="text-xs text-zinc-500">
-                    {formatPrice(occupation.price)} $ARCA
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Initial Balance Input */}
-          <div className="border border-zinc-200 p-6 rounded-lg">
-            <h2 className="text-sm font-medium mb-4">Initial Balance</h2>
-            <input
-              type="number"
-              value={initialBalance}
-              onChange={handleBalanceChange}
-              min="0"
-              step="100"
-              className="w-full border border-zinc-200 rounded-lg px-4 py-2 text-sm"
-            />
+      {hasExistingAgent ? (
+        <div className="max-w-2xl mx-auto text-center">
+          <h1 className="text-2xl font-bold mb-4">Agent Already Exists</h1>
+          <p className="text-gray-600 mb-6">
+            You can only have one active agent at a time. Please visit your agent page to manage your existing agent.
+          </p>
+          <div className="flex flex-col items-center gap-4">
+            <a
+              href="/my-agents"
+              className="px-6 py-2 bg-black text-white rounded-lg hover:bg-zinc-800 transition-colors"
+            >
+              View My Agent
+            </a>
+            <p className="text-sm text-gray-500">
+              Want to create a new agent? First kill your existing agent on the My Agent page.
+            </p>
           </div>
         </div>
+      ) : (
+        <>
+          <h1 className="text-2xl font-normal mb-8">Deploy Agent</h1>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-6 max-h-[calc(100vh-12rem)] overflow-y-auto pr-4">
+              {/* Name Input */}
+              <div className="border border-zinc-200 p-6 rounded-lg">
+                <h2 className="text-sm font-medium mb-4">Name</h2>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter agent name"
+                  className="w-full border border-zinc-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                />
+              </div>
 
-        {/* Preview panel - Update to show name */}
-        <div className="border border-zinc-200 p-6 rounded-lg sticky top-8 h-fit">
-          <h2 className="text-sm font-medium mb-4">Preview</h2>
-          <div className="aspect-square relative bg-zinc-50 rounded-lg mb-4">
-            <img
-              src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${selectedAvatar.seed}`}
-              alt="Selected Avatar"
-              className="w-full h-full p-8"
-            />
+              {/* Avatar Selection */}
+              <div className="border border-zinc-200 p-6 rounded-lg">
+                <h2 className="text-sm font-medium mb-4">Avatar</h2>
+                <div className="grid grid-cols-4 gap-3">
+                  {AVATAR_OPTIONS.map((avatar) => (
+                    <button
+                      key={avatar.id}
+                      onClick={() => setSelectedAvatar(avatar)}
+                      className={`p-2 rounded-lg border transition-all ${
+                        selectedAvatar.id === avatar.id
+                          ? 'border-black shadow-sm'
+                          : 'border-zinc-200 hover:border-zinc-300'
+                      }`}
+                    >
+                      <img
+                        src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${avatar.seed}`}
+                        alt={`Avatar ${avatar.id}`}
+                        className="w-12 h-12 mx-auto"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Gender Selection */}
+              <div className="border border-zinc-200 p-6 rounded-lg">
+                <h2 className="text-sm font-medium mb-4">Gender</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {GENDER_OPTIONS.map((gender) => (
+                    <button
+                      key={gender.id}
+                      onClick={() => setSelectedGender(gender)}
+                      className={`p-4 rounded-lg transition-all ${
+                        selectedGender.id === gender.id
+                          ? 'border border-black  shadow-sm'
+                          : 'border border-zinc-200 hover:border-zinc-300'
+                      }`}
+                    >
+                      <div className="text-sm">{gender.name}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Occupation Selection */}
+              <div className="border border-zinc-200 p-6 rounded-lg">
+                <h2 className="text-sm font-medium mb-4">Occupation</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {OCCUPATION_OPTIONS.map((occupation) => (
+                    <button
+                      key={occupation.id}
+                      onClick={() => {
+                        setSelectedOccupation(occupation);
+                        updateTotalPrice(occupation, initialBalance);
+                      }}
+                      className={`p-4 rounded-lg border ${
+                        selectedOccupation.id === occupation.id
+                          ? 'border-black'
+                          : 'border-zinc-200 hover:border-zinc-300'
+                      }`}
+                    >
+                      <div className="text-sm">{occupation.name}</div>
+                      <div className="text-xs text-zinc-500">
+                        {formatPrice(occupation.price)} $ARCA
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Initial Balance Input */}
+              <div className="border border-zinc-200 p-6 rounded-lg">
+                <h2 className="text-sm font-medium mb-4">Initial Balance</h2>
+                <input
+                  type="number"
+                  value={initialBalance}
+                  onChange={handleBalanceChange}
+                  min="0"
+                  step="100"
+                  className="w-full border border-zinc-200 rounded-lg px-4 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Preview panel - Update to show name */}
+            <div className="border border-zinc-200 p-6 rounded-lg sticky top-8 h-fit">
+              <h2 className="text-sm font-medium mb-4">Preview</h2>
+              <div className="aspect-square relative bg-zinc-50 rounded-lg mb-4">
+                <img
+                  src={`https://api.dicebear.com/9.x/pixel-art/svg?seed=${selectedAvatar.seed}`}
+                  alt="Selected Avatar"
+                  className="w-full h-full p-8"
+                />
+              </div>
+              <div className="space-y-2 mb-6 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Name</span>
+                  <span>{name || 'Unnamed Agent'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Gender</span>
+                  <span>{selectedGender.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Occupation</span>
+                  <span>{selectedOccupation.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Initial Balance</span>
+                  <span>{initialBalance} $ARCA</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2 mb-6 text-sm">
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Name</span>
-              <span>{name || 'Unnamed Agent'}</span>
+
+          {/* Update Deploy Button */}
+          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-white/80 backdrop-blur-sm border border-zinc-200 rounded-lg p-2 shadow-lg">
+            <div className="text-sm font-medium">
+              Total Price: <span className="text-zinc-500">
+                {formatPrice(totalPrice)} $ARCA
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Gender</span>
-              <span>{selectedGender.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Occupation</span>
-              <span>{selectedOccupation.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Initial Balance</span>
-              <span>{initialBalance} $ARCA</span>
-            </div>
+            <button 
+              onClick={handleApproveAndDeploy}
+              disabled={isPending || isConfirming || isApprovalConfirming}
+              className={`bg-black text-white hover:bg-zinc-900 px-6 py-2 rounded-lg transition-colors text-sm font-medium ${
+                (isPending || isConfirming || isApprovalConfirming) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isApprovalConfirming ? 'Approving...' : 
+               isPending ? 'Creating...' : 
+               isConfirming ? 'Confirming...' : 
+               'Deploy Agent'}
+            </button>
           </div>
-        </div>
-      </div>
 
-      {/* Update Deploy Button */}
-      <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-white/80 backdrop-blur-sm border border-zinc-200 rounded-lg p-2 shadow-lg">
-        <div className="text-sm font-medium">
-          Total Price: <span className="text-zinc-500">
-            {formatPrice(totalPrice)} $ARCA
-          </span>
-        </div>
-        <button 
-          onClick={handleApproveAndDeploy}
-          disabled={isPending || isConfirming || isApprovalConfirming}
-          className={`bg-black text-white hover:bg-zinc-900 px-6 py-2 rounded-lg transition-colors text-sm font-medium ${
-            (isPending || isConfirming || isApprovalConfirming) ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          {isApprovalConfirming ? 'Approving...' : 
-           isPending ? 'Creating...' : 
-           isConfirming ? 'Confirming...' : 
-           'Deploy Agent'}
-        </button>
-      </div>
+          {/* Add deployment status message */}
+          {deploymentStatus && (
+            <div className="fixed top-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+              {deploymentStatus}
+            </div>
+          )}
 
-      {/* Add deployment status message */}
-      {deploymentStatus && (
-        <div className="fixed top-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
-          {deploymentStatus}
-        </div>
-      )}
-
-      {/* Success message */}
-      {isConfirmed && (
-        <div className="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-          Agent created successfully!
-        </div>
+          {/* Success message */}
+          {isConfirmed && (
+            <div className="fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+              Agent created successfully!
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -14,10 +14,10 @@ export default function AgentChat() {
   const [isInitializing, setIsInitializing] = useState(false);
 
   // Get agent IDs
-  const { data: myAgentIds } = useReadContract({
+  const { data: myAgentId } = useReadContract({
     address: ARCA_CITY_CONTRACT_ADDRESS,
     abi: arcaAbi,
-    functionName: 'getMyAgents',
+    functionName: 'getMyAgent',
     account: ownerAddress,
     watch: true,
   });
@@ -27,8 +27,8 @@ export default function AgentChat() {
     address: ARCA_CITY_CONTRACT_ADDRESS,
     abi: arcaAbi,
     functionName: 'getAgentInfo',
-    args: myAgentIds?.[2] ? [myAgentIds[2]] : undefined,
-    enabled: Boolean(myAgentIds?.length),
+    args: myAgentId ? [myAgentId] : undefined,
+    enabled: Boolean(myAgentId),
   });
 
   const scrollToBottom = () => {
