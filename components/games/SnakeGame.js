@@ -2,28 +2,30 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseEther } from 'viem';
 import arcaArcadeAbi from '@/contracts/abi/arcaArcade.json';
+import arcaAbi from '@/contracts/abi/arca.json';
 
 const ARCA_ARCADE_ADDRESS = process.env.NEXT_PUBLIC_ARCA_ARCADE_ADDRESS;
 
 export default function SnakeGame({ onScoreChange }) {
-  const [gameState, setGameState] = useState('payment'); // 'payment', 'playing', 'gameover'
+  const [gameState, setGameState] = useState('payment'); // 'payment', 'ready', 'playing', 'gameover'
   const [score, setScore] = useState(0);
   const [isPaymentPending, setIsPaymentPending] = useState(false);
   const [gameFee, setGameFee] = useState(null);
   const { address } = useAccount();
-  const { writeContract } = useWriteContract();
+  const { data: hash, writeContract, isPending } = useWriteContract();
+  const { data: approvalHash, writeContract: writeApproval } = useWriteContract();
   
-  // Add transaction tracking
-  const [approvalHash, setApprovalHash] = useState(null);
-  const [playHash, setPlayHash] = useState(null);
+  // Add transaction receipt hooks
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = 
+    useWaitForTransactionReceipt({
+      hash,
+    });
 
-  // Track transaction confirmations
-  const { isSuccess: isApprovalConfirmed } = useWaitForTransactionReceipt({
+  const { 
+    isLoading: isApprovalConfirming, 
+    isSuccess: isApprovalConfirmed 
+  } = useWaitForTransactionReceipt({
     hash: approvalHash,
-  });
-
-  const { isSuccess: isPlayConfirmed } = useWaitForTransactionReceipt({
-    hash: playHash,
   });
 
   // Game related refs
@@ -34,12 +36,23 @@ export default function SnakeGame({ onScoreChange }) {
   const speedRef = useRef(150);
   const gameLoopRef = useRef(null);
 
+  // Add new state for game ready
+  const [isGameReady, setIsGameReady] = useState(false);
+
   // Get game fee
   const { data: fee } = useReadContract({
     address: ARCA_ARCADE_ADDRESS,
     abi: arcaArcadeAbi,
     functionName: 'getGameFee',
     args: ['snake'],
+  });
+
+  // Get agent ID
+  const { data: agentId } = useReadContract({
+    address: process.env.NEXT_PUBLIC_ARCA_CITY_CONTRACT_ADDRESS,
+    abi: arcaAbi,
+    functionName: 'getMyAgent',
+    account: address,
   });
 
   useEffect(() => {
@@ -81,16 +94,58 @@ export default function SnakeGame({ onScoreChange }) {
     }
   };
 
+  const handleGameOver = async () => {
+    setGameState('gameover');
+    if (gameLoopRef.current) {
+      clearTimeout(gameLoopRef.current);
+      gameLoopRef.current = null;
+    }
+
+    if (agentId) {
+      try {
+        // Only send game data to backend
+        const response = await fetch('/api/updateGameReputation', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            agentId: Number(agentId),
+            gameData: {
+              gameType: 'snake',
+              score,
+              timestamp: Date.now()
+            }
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to update game results');
+        }
+
+        const result = await response.json();
+        console.log('Game results updated:', result);
+
+      } catch (error) {
+        console.error('Error updating game results:', error);
+      }
+    }
+  };
+
   const checkCollision = (head) => {
-    // Wall collision
     if (head.x < 0 || head.x >= 20 || head.y < 0 || head.y >= 20) {
+      handleGameOver();
       return true;
     }
     
-    // Self collision
-    return snakeRef.current.slice(1).some(segment => 
+    if (snakeRef.current.slice(1).some(segment => 
       segment.x === head.x && segment.y === head.y
-    );
+    )) {
+      handleGameOver();
+      return true;
+    }
+    
+    return false;
   };
 
   const updateGame = () => {
@@ -177,12 +232,12 @@ export default function SnakeGame({ onScoreChange }) {
     gameLoop();
   };
 
-  const handleGamePayment = async () => {
+  const handleApproveAndPlay = async () => {
     try {
       setIsPaymentPending(true);
       
       // First approve ARCA tokens
-      const approvalResult = await writeContract({
+      await writeApproval({
         address: process.env.NEXT_PUBLIC_ARCA_TOKEN_ADDRESS,
         abi: [
           {
@@ -200,47 +255,89 @@ export default function SnakeGame({ onScoreChange }) {
         args: [ARCA_ARCADE_ADDRESS, gameFee]
       });
 
-      setApprovalHash(approvalResult);
-
     } catch (error) {
-      console.error('Approval failed:', error);
+      console.error('Failed to approve tokens:', error);
       setIsPaymentPending(false);
     }
   };
 
-  // Watch for approval confirmation and initiate game transaction
-  useEffect(() => {
-    const initiateGameTransaction = async () => {
-      if (isApprovalConfirmed) {
-        try {
-          const playResult = await writeContract({
-            address: ARCA_ARCADE_ADDRESS,
-            abi: arcaArcadeAbi,
-            functionName: 'playGame',
-            args: ['snake']
-          });
-          
-          setPlayHash(playResult);
-        } catch (error) {
-          console.error('Game transaction failed:', error);
-          setIsPaymentPending(false);
-        }
-      }
-    };
+  // Handle play after approval is confirmed
+  const handlePlay = async () => {
+    try {
+      await writeContract({
+        address: ARCA_ARCADE_ADDRESS,
+        abi: arcaArcadeAbi,
+        functionName: 'playGame',
+        args: ['snake']
+      });
+    } catch (error) {
+      console.error('Game transaction failed:', error);
+      setIsPaymentPending(false);
+    }
+  };
 
+  // Watch for approval confirmation
+  useEffect(() => {
     if (isApprovalConfirmed) {
-      initiateGameTransaction();
+      handlePlay();
     }
   }, [isApprovalConfirmed]);
 
-  // Watch for play confirmation and start game
+  // Watch for play confirmation
   useEffect(() => {
-    if (isPlayConfirmed) {
-      setGameState('playing');
-      startGame();
+    if (isConfirmed) {
+      setGameState('ready'); // Change to 'ready' instead of 'playing'
       setIsPaymentPending(false);
     }
-  }, [isPlayConfirmed]);
+  }, [isConfirmed]);
+
+  // Handle keyboard events
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (gameState !== 'playing') return;
+      e.preventDefault(); // Prevent scrolling
+      
+      const { x, y } = directionRef.current;
+      
+      switch(e.key) {
+        case 'ArrowUp':
+          if (y === 0) directionRef.current = { x: 0, y: -1 };
+          break;
+        case 'ArrowDown':
+          if (y === 0) directionRef.current = { x: 0, y: 1 };
+          break;
+        case 'ArrowLeft':
+          if (x === 0) directionRef.current = { x: -1, y: 0 };
+          break;
+        case 'ArrowRight':
+          if (x === 0) directionRef.current = { x: 1, y: 0 };
+          break;
+      }
+    };
+
+    // Add event listener to window instead of div
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [gameState]);
+
+  const handleStartGame = () => {
+    setGameState('playing');
+    setIsGameReady(true);
+    startGame();
+  };
+
+  // Initialize canvas when game starts
+  useEffect(() => {
+    if (gameState === 'playing' && canvasRef.current) {
+      const canvas = canvasRef.current;
+      canvas.width = 20 * 20;
+      canvas.height = 20 * 20;
+      startGame();
+    }
+  }, [gameState]);
 
   const renderPaymentScreen = () => (
     <div className="flex flex-col items-center justify-center min-h-[400px] w-full max-w-md mx-auto">
@@ -255,79 +352,83 @@ export default function SnakeGame({ onScoreChange }) {
             </p>
           </div>
 
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300">How to Play:</h3>
-            <ul className="text-sm text-gray-500 dark:text-gray-400 list-disc pl-5 space-y-1">
-              <li>Use arrow keys to control the snake</li>
-              <li>Eat food to grow longer</li>
-              <li>Avoid hitting walls and yourself</li>
-              <li>Score points to earn rewards!</li>
-            </ul>
-          </div>
-
           {!address ? (
             <div className="text-center text-red-500">
               Please connect your wallet to play
             </div>
           ) : (
             <button
-              onClick={handleGamePayment}
-              disabled={isPaymentPending}
+              onClick={handleApproveAndPlay}
+              disabled={isPending || isConfirming || isApprovalConfirming}
               className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {isPaymentPending ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Processing...
-                </span>
-              ) : (
-                `Play Now (${gameFee ? Number(gameFee) / 1e18 : '...'} ARCA)`
-              )}
+              {isApprovalConfirming ? 'Approving...' : 
+               isPending ? 'Processing...' : 
+               isConfirming ? 'Confirming...' : 
+               `Play Now (${gameFee ? Number(gameFee) / 1e18 : '...'} ARCA)`}
             </button>
+          )}
+
+          {/* Status Messages */}
+          {(isApprovalConfirming || isPending || isConfirming) && (
+            <div className="text-sm text-center text-gray-500">
+              {isApprovalConfirming && 'Approving ARCA tokens...'}
+              {isPending && 'Processing game payment...'}
+              {isConfirming && 'Confirming transaction...'}
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas && gameState !== 'gameover') {
-      canvas.width = 20 * 20;
-      canvas.height = 20 * 20;
-    }
-    
-    window.addEventListener('keydown', handleKeyPress);
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyPress);
-      if (gameLoopRef.current) clearTimeout(gameLoopRef.current);
-    };
-  }, [gameState]);
+  // Render ready screen
+  const renderReadyScreen = () => (
+    <div className="w-full max-w-2xl mx-auto">
+      <div className="flex flex-col items-center justify-center min-h-[400px] bg-white rounded-lg shadow-lg p-8">
+        <h2 className="text-2xl font-bold mb-6">Ready to Play!</h2>
+        <div className="mb-8 text-center space-y-4">
+          <p className="text-gray-600">Use arrow keys to control the snake</p>
+          <p className="text-gray-600">Collect food to grow and score points</p>
+          <p className="text-gray-600">Don't hit the walls or yourself!</p>
+        </div>
+        <button
+          onClick={handleStartGame}
+          className="px-8 py-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-lg font-medium"
+        >
+          Start Game
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-4 w-full">
       {gameState === 'payment' && renderPaymentScreen()}
       
+      {gameState === 'ready' && renderReadyScreen()}
+      
       {gameState === 'playing' && (
-        <>
-          <div className="flex justify-between w-full px-4">
+        <div className="w-full max-w-2xl mx-auto">
+          <div className="flex justify-between items-center mb-4 px-4">
             <div className="text-lg font-medium">Score: {score}</div>
           </div>
-          <div className="relative">
+          <div className="relative bg-white rounded-lg shadow-lg p-4">
             <canvas
               ref={canvasRef}
-              className="border border-gray-200 rounded-lg"
+              className="border border-gray-200 rounded-lg mx-auto"
+              style={{ maxWidth: '100%' }}
+              tabIndex="0" // Make canvas focusable
             />
           </div>
-        </>
+          <div className="text-center mt-4 text-sm text-gray-500">
+            Use arrow keys to control the snake
+          </div>
+        </div>
       )}
       
       {gameState === 'gameover' && (
-        <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center justify-center min-h-[400px] w-full">
           <div className="bg-white p-8 rounded-lg shadow-lg text-center">
             <div className="text-3xl font-bold text-red-500 mb-4">Game Over!</div>
             <div className="text-2xl mb-6">Final Score: {score}</div>
