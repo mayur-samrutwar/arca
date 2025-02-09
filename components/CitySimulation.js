@@ -20,17 +20,6 @@ const CITY_LAYOUT = Array(GRID_HEIGHT).fill().map((_, y) =>
 
 // Building assets with fixed positions
 const BUILDINGS = {
-  BANK: {
-    img: '/assets/bank.png',
-    label: 'BANK',
-    position: { x: 2, y: 2 },
-    size: { width: 2, height: 2 },
-    details: {
-      name: 'City Central Bank',
-      totalBalance: '$10,000,000',
-      totalMembers: '5,000'
-    }
-  },
   COURT: {
     img: '/assets/court.png',
     label: 'COURT',
@@ -617,21 +606,30 @@ export default function CitySimulation() {
       />
       
       {selectedBuilding && (
-        <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-lg font-bold">{BUILDINGS[selectedBuilding].details.name}</h3>
-            <button
-              onClick={() => setSelectedBuilding(null)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ×
-            </button>
-          </div>
-          <div className="space-y-2">
-            <p>Total Balance: {BUILDINGS[selectedBuilding].details.totalBalance}</p>
-            <p>Total Members: {BUILDINGS[selectedBuilding].details.totalMembers}</p>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-md w-full">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">
+            {BUILDINGS[selectedBuilding].details.name}
+          </h3>
+          <button
+            onClick={() => setSelectedBuilding(null)}
+            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+            <span className="text-gray-600 dark:text-gray-400">Total Employees</span>
+            <span className="font-medium">{BUILDINGS[selectedBuilding].details.totalMembers}</span>
           </div>
         </div>
+      </div>
+    </div>
       )}
 
       {Object.entries(conversations).map(([id, conversation]) => (
