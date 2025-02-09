@@ -1,6 +1,6 @@
 to-dos
 
- - [ x ] fix the contract for intitial tranfer bug
+ - [x] fix the contract for intitial tranfer bug
  - [ x ] make the agents secure(remove the private key exposed wala logic)
  - [ ] add reputation score to the agents
  - [ ] give memory to agents
