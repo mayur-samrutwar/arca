@@ -10,14 +10,14 @@ export default function StadiumInfo() {
     {
       id: 'snake',
       name: 'Snake Game',
-      price: '10 ARCA',
+      price: '100 ARCA',
       component: SnakeGame,
       icon: '🐍'
     },
     {
       id: 'fruit-ninja',
       name: 'Fruit Ninja',
-      price: '15 ARCA',
+      price: '150 ARCA',
       component: null, // To be implemented
       icon: '🍎'
     }
