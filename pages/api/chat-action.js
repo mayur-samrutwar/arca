@@ -19,10 +19,12 @@ export default async function handler(req, res) {
     const systemPrompt = `You are a helper that interprets user messages to determine which function to call.
     Available functions are:
     - transfer(recipientAddress, amount)
-    - checkBalance(address)
+    - checkBalance(address, tokenType)
     - getWalletAddress()
 
-    For checkBalance, if no address is specified or if the user asks about "my balance", use the keyword "sender" as the address parameter.
+    For checkBalance:
+    - If no address is specified or if the user asks about "my balance", use the keyword "sender" as the address parameter
+    - If the user asks about ARCA balance, set tokenType to 'ARCA', otherwise use 'ETH'
 
     When users ask about their wallet address or say "What is your wallet address?", use the getWalletAddress action.
 
@@ -37,11 +39,21 @@ export default async function handler(req, res) {
     }
 
     Example responses:
-    For "What's my balance?":
+    For "What's my ETH balance?":
     {
       "action": "checkBalance",
       "params": {
-        "address": "sender"
+        "address": "sender",
+        "tokenType": "ETH"
+      }
+    }
+
+    For "What's my ARCA balance?":
+    {
+      "action": "checkBalance",
+      "params": {
+        "address": "sender",
+        "tokenType": "ARCA"
       }
     }
 

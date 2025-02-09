@@ -13,7 +13,8 @@ const cors = require('cors');
 const connectDB = require('./db/connection');
 const Agent = require('./db/models/Agent');
 const path = require('path');
-const { formatEther, parseEther } = require('viem');
+const { formatEther, parseEther, createPublicClient, http } = require('viem');
+const { baseSepolia } = require('viem/chains');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 console.log('Initial env check:', {
@@ -35,6 +36,12 @@ app.use(express.json());
 
 // Connect to MongoDB
 connectDB();
+
+// Create a public client for reading contract data
+const publicClient = createPublicClient({
+  chain: baseSepolia,
+  transport: http()
+});
 
 // Generate wallet endpoint
 app.post('/generate-wallet', async (req, res) => {
@@ -230,12 +237,31 @@ app.post('/agent-action', async (req, res) => {
         break;
       case 'checkBalance':
         try {
-          // Try to get ETH balance using walletProvider
-          const address = params.address === 'sender' ? agentAddress : params.address;
-          const balanceBigInt = await agentkit.walletProvider.getBalance(address);
-          // Convert Wei to ETH and format as string
-          result = formatEther(balanceBigInt);
-          console.log('Balance result (ETH):', result);
+          if (params.tokenType === 'ARCA') {
+            // Read ARCA balance using contract call
+            const arcaBalance = await publicClient.readContract({
+              address: process.env.ARCA_TOKEN_ADDRESS,
+              abi: [
+                {
+                  "inputs": [{"name": "account", "type": "address"}],
+                  "name": "balanceOf",
+                  "outputs": [{"name": "", "type": "uint256"}],
+                  "stateMutability": "view",
+                  "type": "function"
+                }
+              ],
+              functionName: 'balanceOf',
+              args: [params.address === 'sender' ? agentAddress : params.address],
+            });
+            result = formatEther(arcaBalance);
+            console.log('ARCA Balance result:', result);
+          } else {
+            // Existing ETH balance check
+            const address = params.address === 'sender' ? agentAddress : params.address;
+            const balanceBigInt = await agentkit.walletProvider.getBalance(address);
+            result = formatEther(balanceBigInt);
+            console.log('ETH Balance result:', result);
+          }
         } catch (error) {
           console.error('Balance check error:', error);
           throw error;
